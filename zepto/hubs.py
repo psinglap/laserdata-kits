@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import random
 import time
+import zlib
 from collections import defaultdict
 from datetime import timedelta
 
@@ -34,6 +35,15 @@ async def main(a):
     orders = await client.consumer_group("hubs", STREAM, ORDERS, polling_strategy=PollingStrategy.Next(), batch_length=1000,
                                          auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(microseconds=500))
     keys = [key(h, s) for h in range(a.hubs) for s in range(a.skus)]
+    part = {k: zlib.crc32(k.encode()) % a.partitions for k in keys}   # one partition per hub:sku, so its changes stay in order
+
+    async def send_by_partition(producer, changes):
+        # One batch per partition instead of one send per key: same ordering, far fewer round trips.
+        batches = defaultdict(list)
+        for k, m in changes:
+            batches[part[k]].append(m)
+        for pid, ms in batches.items():
+            await producer.send_with_partitioning(ms, Partitioning.partition_id(pid))
     level = {k: random.randint(0, 6) for k in keys}          # a dark store holds a few units of each SKU
     price = {k: random.randint(15, 400) for k in keys}       # rupees
     inv_seq, price_seq, stats = defaultdict(int), defaultdict(int), defaultdict(int)
@@ -52,7 +62,7 @@ async def main(a):
         if level[k] > 0:
             level[k] -= 1
             stats["accepted"] += 1
-            await inv_p.send_with_partitioning([inv_change(k)], Partitioning.messages_key(k))
+            await inv_p.send_with_partitioning([inv_change(k)], Partitioning.partition_id(part[k]))
             status = "confirmed"
         else:
             stats["rejected"] += 1      # shown as in stock after re-validation, already gone
@@ -60,11 +70,10 @@ async def main(a):
         await status_p.send_with_partitioning([SendMessage(msg(order=o["order"], status=status))], Partitioning.messages_key(o["order"]))
 
     async def snapshot():
-        # Starting level and price of every SKU, like a CDC snapshot. Batches are spread across
-        # partitions; the per-key sequence keeps it safe, since a reader keeps only the newest.
-        for i in range(0, len(keys), 1000):
-            await inv_p.send_with_partitioning([inv_change(k) for k in keys[i:i + 1000]], Partitioning.balanced())
-            await price_p.send_with_partitioning([price_change(k) for k in keys[i:i + 1000]], Partitioning.balanced())
+        # Starting level and price of every SKU, like a CDC snapshot.
+        for i in range(0, len(keys), 5000):
+            await send_by_partition(inv_p, [(k, inv_change(k)) for k in keys[i:i + 5000]])
+            await send_by_partition(price_p, [(k, price_change(k)) for k in keys[i:i + 5000]])
         print(f"[hubs] snapshot: {len(keys):,} SKUs across {a.hubs} hubs", flush=True)
 
     async def churn():
@@ -74,22 +83,20 @@ async def main(a):
             while True:
                 t = time.monotonic() - t0
                 peak = a.festive if a.festive_at and a.festive_at <= t < a.festive_at + a.festive_for else 1
-                inv, prices = {}, {}
+                inv, prices = [], []
                 for _ in range(max(1, int(a.rate * peak / 100))):
                     k = random.choice(keys)
                     if random.random() < 0.2:                       # price or offer change
                         price[k] = max(5, round(price[k] * random.choice([0.9, 0.95, 1.05])))
-                        prices.setdefault(k, []).append(price_change(k))
+                        prices.append((k, price_change(k)))
                     else:
                         if random.random() < 0.75 and level[k] > 0:
                             level[k] -= 1                           # picked for another order
                         else:
                             level[k] += random.randint(1, 6)        # restock from the mother hub
-                        inv.setdefault(k, []).append(inv_change(k))
-                for k, ms in inv.items():
-                    await inv_p.send_with_partitioning(ms, Partitioning.messages_key(k))
-                for k, ms in prices.items():
-                    await price_p.send_with_partitioning(ms, Partitioning.messages_key(k))
+                        inv.append((k, inv_change(k)))
+                await send_by_partition(inv_p, inv)
+                await send_by_partition(price_p, prices)
                 due += 0.01
                 await asyncio.sleep(max(0.0, due - time.monotonic()))
 
