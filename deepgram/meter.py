@@ -59,15 +59,15 @@ async def main(a):
         u = load(m.payload())
         now = time.time_ns()
         age = (now - u["ns"]) / 1e6
-        if not caught_up[0]:                # still replaying: track the oldest message seen this second
-            stats["replayed"] += 1
-            stats["max_age"] = max(stats["max_age"], age)
         sid = u["id"]
         tot["naive_ms"] += u["d"]           # what a meter that adds every message's chunk would count
         seq, ms = last.get(sid, (0, 0))
         if sid in closed or u["seq"] <= seq:
             tot["absorbed"] += 1            # a retry or a replay: already counted
             return
+        if not caught_up[0]:                # still replaying: track the oldest new message seen this second
+            stats["replayed"] += 1          # (a retry carries its original send time, so it is left out)
+            stats["max_age"] = max(stats["max_age"], age)
         add = u["ms"] - ms
         last[sid] = (u["seq"], u["ms"])
         minute = u["ns"] // 60_000_000_000
