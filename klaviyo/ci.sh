@@ -23,7 +23,12 @@ timeout 78 python -u s3_replay.py --mbps 4 > replay.log 2>&1 &
 wait || true
 echo "--- publisher.log"; head -n 2 publisher.log; sed -n '28,30p' publisher.log; tail -n 2 publisher.log
 echo "--- replay.log"; tail -n 2 replay.log
-for s in 0 1; do echo "--- retrier-$s.log"; head -n 3 retrier-$s.log; tail -n 4 retrier-$s.log; done
+for s in 0 1; do echo "--- retrier-$s.log"; head -n 3 retrier-$s.log; tail -n 2 retrier-$s.log; done
+echo "--- a blip second and a surge second on each retrier"
+for s in 0 1; do
+  (grep -E "\] +[1-9][0-9]? failed writes/s" retrier-$s.log | sed -n '15p'
+   grep -E "\] +[1-9],[0-9]{3} failed writes/s" retrier-$s.log | sed -n '15p') || true
+done
 echo "--- FAIL seconds (file:line: output)"; grep -n "FAIL (" retrier-*.log | cut -c1-170 || true
 status=0
 # Skip a 10 s warm-up; a shared CI runner may blip, so require 95% of seconds to pass.
