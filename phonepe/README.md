@@ -7,6 +7,7 @@ has to move.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/5N71H6jtAS91JqJE8WU9zc
 - **One slide:** [`LaserData_PhonePe_VelocityFeatures.pdf`](LaserData_PhonePe_VelocityFeatures.pdf)
 
 ## Why this use case
