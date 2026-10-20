@@ -63,14 +63,15 @@ broker to coordinator. Both print a line a second:
 to the moment `dispatch.py` has applied it to the coordinator's view, through Python clients, on
 whatever machine you run it on. On a shared 2-vCPU CI runner with the broker and all scripts on one
 box, at about 860 feedback events/s (20,000 stores, 300 orders/s, a dispatch run every 500 ms,
-marketplace time 60× faster), the steady state held p50 11.1 ms, p99 22.0 ms and p99.9 24.2 ms, with
-55 of 55 seconds under the 100 ms budget. While a 4 MB/s client analytics flood ran on the same
-broker and the same two vCPUs, p99 moved from 22.0 ms to 22.3 ms. In a typical second, 1 of 300
-dispatch decisions (0.33%) was made on store feedback that had already changed; the worst second was
-4 of 300, and at most 2 of 300 would have flipped between speed and batching. That is the end-to-end
+marketplace time 60× faster), three runs held p50 11.1 ms, p99 21.8–22.1 ms and p99.9 24.0–24.4 ms,
+with all 165 steady-state seconds under the 100 ms budget. While a 4 MB/s client analytics flood
+ran on the same broker and the same two vCPUs, p99 moved by at most 0.3 ms (22.0 to 22.3 ms in the
+first run). In a typical second, 0 or 1 of 300 dispatch decisions (0–0.33%) was made on store
+feedback that had already changed; the worst second was 4 of 300, and at most 3 of 300 in a second
+would have flipped between speed and batching. That is the end-to-end
 lane through this demo code, not the broker alone. The broker's own tail latency is measured with
 `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
-([CI run](https://github.com/psinglap/laserdata-kits/actions/runs/39478089715))
+([CI run](https://github.com/psinglap/laserdata-kits/actions/runs/39480074045))
 
 | File | What it is |
 |---|---|
