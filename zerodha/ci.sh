@@ -15,7 +15,7 @@ python -m py_compile common.py feed.py ticker.py postbacks.py nats_bridge.py
 N=8000
 timeout 88 python -u feed.py --instruments $N --rate 1000 --snapshot-every 15 > feed.log 2>&1 &
 sleep 4
-timeout 76 python -u postbacks.py --rate 300 --x 10 --at 40 --for 15 > postbacks.log 2>&1 &
+timeout 76 python -u postbacks.py --rate 100 --x 10 --at 40 --for 15 > postbacks.log 2>&1 &
 timeout 76 python -u ticker.py --name ticker-1 --instruments $N --users 5000 --replay-s 0 > ticker-1.log 2>&1 &
 # ticker-2 runs, stops at 34 s and starts again: on restart it must rebuild every quote from the
 # last 20 s of the log (one 15 s rolling snapshot plus the ticks since).

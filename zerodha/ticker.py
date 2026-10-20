@@ -94,8 +94,9 @@ async def main(a):
             if ms:
                 apply(pid, ms, time.time_ns())
                 nxt = ms[-1].offset() + 1
-            else:
-                await asyncio.sleep(a.poll_ms / 1000)
+                if len(ms) == a.batch:
+                    continue                        # more is waiting (a replay or a burst): read on at once
+            await asyncio.sleep(a.poll_ms / 1000)   # the feed writes once per --tick-ms; wait for the next write
 
     async def report():
         shown = False
@@ -129,7 +130,7 @@ if __name__ == "__main__":
     p.add_argument("--users", type=int, default=50_000, help="simulated users on this node")
     p.add_argument("--watch", type=int, default=50, help="instruments in each user's market watch")
     p.add_argument("--budget-ms", type=float, default=10, help="p99 budget for feed-to-ticker")
-    p.add_argument("--poll-ms", type=float, default=1, help="wait before polling an empty partition again")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between polls of a partition, unless the last read was a full batch")
     p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--replay-s", type=float, default=75, help="rebuild from this many seconds back (> feed.py --snapshot-every); 0 = whole log")
     asyncio.run(main(p.parse_args()))
