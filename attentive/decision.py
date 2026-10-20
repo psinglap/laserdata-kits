@@ -5,12 +5,14 @@ Worker --worker of --workers owns every partition p with p % workers == worker a
 directly (no consumer group, no rebalance), in order. Because the storefront keys events by
 subscriber, every event of a subscriber reaches this one worker, one after another: the decision
 for a subscriber is never made twice at the same time, and no lock is needed. Offsets are stored
-under a per-partition consumer name, so whichever worker owns a partition next resumes from it.
+on the broker at most once a second under a per-partition consumer name, so whichever worker owns
+a partition next resumes from it (events after the last stored offset are read again; the
+per-subscriber sequence drops them).
 
 The decision rule is deliberately small (the real engine is Attentive's): an add_to_cart or
 checkout_started event triggers one reminder text, unless this subscriber already got one, or
 purchased, within --cooldown-s. Each text is written to the send-intents topic, keyed by
-subscriber, with this worker's ID, for the send service.
+subscriber, with this worker's ID, for the send service, by a separate sender every --flush-ms.
 
 Prints a line a second:
   * event-to-decision latency (written by the storefront to decided here), PASS or FAIL against --budget-ms;
@@ -79,18 +81,23 @@ async def main(a):
             lat.add(age / 1e6)
         st["events"] += 1
 
+    out = defaultdict(list)                               # send-intents waiting for the next flush
+
     async def reader(plist):
-        c, out_c = await connect(a.url), await connect(a.url)   # one connection to read, one to write
+        c = await connect(a.url)
         consumers = {p: Consumer.Single(f"decision-p{p}") for p in plist}
-        nxt = {}
+        nxt, committed = {}, {}
         while True:
             more = False
-            out = defaultdict(list)
             for p in plist:
                 start = PollingStrategy.Offset(nxt[p]) if p in nxt else PollingStrategy.Next()
+                # Store this partition's offset on the broker at most once a second, not on every poll.
+                commit = time.monotonic() - committed.get(p, 0) >= a.commit_s
                 ms = await c.poll_messages(STREAM, EVENTS_TOPIC, consumer=consumers[p], partition_id=p,
-                                           count=a.batch, auto_commit=True, polling_strategy=start)
+                                           count=a.batch, auto_commit=commit, polling_strategy=start)
                 if ms:
+                    if commit:
+                        committed[p] = time.monotonic()
                     nxt[p] = ms[-1].offset() + 1
                     now = time.time_ns()
                     for m in ms:
@@ -98,11 +105,20 @@ async def main(a):
                         e["_p"] = p
                         decide(e, now, out)
                     more = more or len(ms) == a.batch
-            if out:
-                await asyncio.gather(*(out_c.send_messages(STREAM, SENDS_TOPIC, Partitioning.partition_id(pid), ms)
-                                       for pid, ms in out.items()))
             if not more:
                 await asyncio.sleep(a.poll_ms / 1000)
+
+    async def sender():
+        # The decided texts go out on their own connection, one batch per send partition per tick,
+        # so the reader never waits on a send and the broker sees a few larger writes, not many tiny ones.
+        w = await connect(a.url)
+        while True:
+            await asyncio.sleep(a.flush_ms / 1000)
+            if out:
+                batch = dict(out)
+                out.clear()
+                await asyncio.gather(*(w.send_messages(STREAM, SENDS_TOPIC, Partitioning.partition_id(pid), ms)
+                                       for pid, ms in batch.items()))
 
     async def report():
         while True:
@@ -127,7 +143,7 @@ async def main(a):
     groups = [mine[r::a.readers] for r in range(a.readers)]
     print(f"[{name}] owns partitions {mine} of {parts} (worker {a.worker} of {a.workers}), "
           f"reading on {a.readers} connection(s)", flush=True)
-    await asyncio.gather(report(), *(reader(g) for g in groups if g))
+    await asyncio.gather(report(), sender(), *(reader(g) for g in groups if g))
 
 
 if __name__ == "__main__":
@@ -142,4 +158,6 @@ if __name__ == "__main__":
     p.add_argument("--budget-ms", type=float, default=50, help="p99 budget, event written to decision made")
     p.add_argument("--poll-ms", type=float, default=5, help="wait between rounds when nothing more is waiting")
     p.add_argument("--batch", type=int, default=1000)
+    p.add_argument("--flush-ms", type=float, default=20, help="how often decided texts are sent")
+    p.add_argument("--commit-s", type=float, default=1, help="how often each partition's offset is stored")
     asyncio.run(main(p.parse_args()))
