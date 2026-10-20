@@ -2,9 +2,11 @@
 
 Team edits and contest joins on their own topic, at a steady rate and then --x times the rate
 for --for seconds: "After the toss of every match, we typically see a high surge in contest
-joins per second" (Dream11 Engineering blog, 2021). Run it while scoring.py and points_node.py
-run, and watch whether the points lane's p99 moves when the surge hits. One batch per tick,
-spread over the partitions by the broker.
+joins per second" (Dream11 Engineering blog, 2021). At the peak the defaults send 28,000 a
+second: the "20000+ team updates per second" and "8000+ contest joins per second" Dream11
+reported for IPL 2020. Run it while scoring.py and points_node.py run, and watch whether the
+points lane's p99 moves when the surge hits. One batch per tick, spread over the partitions
+by the broker.
 """
 import argparse
 import asyncio
@@ -19,7 +21,7 @@ from common import DEFAULT_URL, STREAM, SURGE, connect, ensure_topic, match_ids
 
 
 def event(rng, n, matches):
-    kind = rng.choice(("team.save", "team.save", "contest.join"))
+    kind = "team.save" if rng.random() < 20 / 28 else "contest.join"
     e = {"event": kind, "user_id": rng.randrange(1, 200_000_000), "match": rng.choice(matches), "team_no": rng.randint(1, 6),
          "ts": time.time_ns(), "n": n}
     if kind == "team.save":
@@ -60,8 +62,8 @@ async def main(a):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--url", default=DEFAULT_URL)
-    p.add_argument("--rate", type=float, default=2000, help="events per second before the surge")
-    p.add_argument("--x", type=float, default=4, help="surge multiplier (2,000 x 4 = 8,000 a second)")
+    p.add_argument("--rate", type=float, default=7000, help="events per second before the surge")
+    p.add_argument("--x", type=float, default=4, help="surge multiplier (7,000 x 4 = 28,000 a second)")
     p.add_argument("--at", type=float, default=30, help="surge starts this many seconds in")
     p.add_argument("--for", dest="for_s", type=float, default=20)
     asyncio.run(main(p.parse_args()))
