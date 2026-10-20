@@ -13,6 +13,7 @@ timeout 70 python -u revalidate.py --refresh 5 --searches-per-s 100 > revalidate
 wait || true
 echo "--- hubs.log";       tail -n 8 hubs.log
 echo "--- revalidate.log"; tail -n 8 revalidate.log
+echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" revalidate.log | cut -c1-120 || true
 live=$(grep -Ec '\[revalidate\] +[1-9][0-9,]* changes/s.*PASS' revalidate.log || true)
 fail=$(grep -Ec '\[revalidate\] +[1-9][0-9,]* changes/s.*FAIL' revalidate.log || true)
 echo "seconds with live traffic: PASS $live, FAIL $fail"

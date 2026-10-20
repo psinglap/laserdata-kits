@@ -38,12 +38,12 @@ async def main(a):
     part = {k: zlib.crc32(k.encode()) % a.partitions for k in keys}   # one partition per hub:sku, so its changes stay in order
 
     async def send_by_partition(producer, changes):
-        # One batch per partition instead of one send per key: same ordering, far fewer round trips.
+        # One batch per partition, all sent at once: same per-key ordering, about one round trip per tick.
         batches = defaultdict(list)
         for k, m in changes:
             batches[part[k]].append(m)
-        for pid, ms in batches.items():
-            await producer.send_with_partitioning(ms, Partitioning.partition_id(pid))
+        await asyncio.gather(*(producer.send_with_partitioning(ms, Partitioning.partition_id(pid))
+                               for pid, ms in batches.items()))
     level = {k: random.randint(0, 6) for k in keys}          # a dark store holds a few units of each SKU
     price = {k: random.randint(15, 400) for k in keys}       # rupees
     inv_seq, price_seq, stats = defaultdict(int), defaultdict(int), defaultdict(int)
@@ -95,8 +95,7 @@ async def main(a):
                         else:
                             level[k] += random.randint(1, 6)        # restock from the mother hub
                         inv.append((k, inv_change(k)))
-                await send_by_partition(inv_p, inv)
-                await send_by_partition(price_p, prices)
+                await asyncio.gather(send_by_partition(inv_p, inv), send_by_partition(price_p, prices))
                 due += 0.01
                 await asyncio.sleep(max(0.0, due - time.monotonic()))
 
