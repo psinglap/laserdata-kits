@@ -7,6 +7,7 @@ everything else stay where they are.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/Yax7oid7Rc8NuxRw4KR9Nv
 - **One slide:** [`LaserData_Swiggy_RiderETA.pdf`](LaserData_Swiggy_RiderETA.pdf)
 
 ## Why this use case
