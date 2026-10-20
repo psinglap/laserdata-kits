@@ -47,7 +47,7 @@ async def main(a):
     client = IggyClient.from_connection_string(a.url)
     await client.connect()
     cfg = DirectProducerConfig(batch_length=1000, linger_time=timedelta(microseconds=500))
-    hours = IggyExpiry.ExpireDuration(timedelta(hours=a.keep_hours))   # pings matter for hours, not days
+    hours = IggyExpiry.ExpireDuration(timedelta(hours=a.keep_hours)) if a.keep_hours > 0 else None   # pings matter for hours, not days
     pings_p = await client.producer(STREAM, PINGS, topic_partitions_count=a.partitions, mode=cfg, topic_message_expiry=hours)
     legs_p = await client.producer(STREAM, LEGS, topic_partitions_count=a.partitions, mode=cfg)
     if await client.get_topic(STREAM, ETA) is None:          # track.py may not have created it yet
