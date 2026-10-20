@@ -6,6 +6,7 @@ beside Event Hubs today, and beside whichever broker you choose next, so nothing
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.stubhub-kit
 - **One slide:** [`LaserData_StubHub_ListingLane.pdf`](LaserData_StubHub_ListingLane.pdf)
 
 ## Why this use case
