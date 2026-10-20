@@ -25,7 +25,7 @@ from datetime import timedelta
 from apache_iggy import AutoCommit, IggyClient, PollingStrategy, SendMessage
 
 from common import (ALERTS, DEFAULT_URL, DOOR_CAUSE_S, DOOR_OUTSIDE, PARTITIONS, READINGS, STREAM, TEMP_BAND,
-                    TEMP_HIGH, Window, ensure_topics, inside_approved, load, msg)
+                    TEMP_HIGH, Stalls, Window, ensure_topics, inside_approved, load, msg)
 
 
 def rules(d: dict, hot: bool):
@@ -51,7 +51,7 @@ async def main(a):
         auto_commit=AutoCommit.Interval(timedelta(seconds=1)),     # offsets stored once a second, not per poll
         poll_interval=timedelta(microseconds=500))
     out = await (await own_client()).producer(STREAM, ALERTS, topic_partitions_count=PARTITIONS[ALERTS])
-    lat, stats = Window(), defaultdict(float)
+    lat, stats, stalls = Window(), defaultdict(float), Stalls()
     seq = {}                                # asset -> last event sequence applied
     hot = set()                             # assets in a temperature excursion
     pending = []                            # alerts waiting for the next send (one batch every 2 ms)
@@ -119,10 +119,10 @@ async def main(a):
                   f"p99.9 {r['p999']:6.1f}ms  {ok} (<{a.budget_ms}ms)  door changes {int(stats['doors']):,}  "
                   f"alerts sent {int(stats['sent']):,} (door outside geofence {int(stats[DOOR_OUTSIDE]):,}, "
                   f"temperature {int(stats[TEMP_HIGH]):,}, cause named {int(stats['temp_door']):,})  "
-                  f"assets in excursion {len(hot):,}", flush=True)
+                  f"assets in excursion {len(hot):,}  {stalls.read()}", flush=True)
             stats.clear()
 
-    await asyncio.gather(events.consume_messages(on_event, asyncio.Event()), send_alerts(), report())
+    await asyncio.gather(events.consume_messages(on_event, asyncio.Event()), send_alerts(), report(), stalls.watch())
 
 
 if __name__ == "__main__":

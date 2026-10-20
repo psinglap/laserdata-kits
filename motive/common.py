@@ -3,6 +3,7 @@ Asset Gateway reaches the alert rules in milliseconds, in order per asset, and e
 driver and the back office while the door is still open, on Apache Iggy."""
 import asyncio
 import functools
+import gc
 import json
 import math
 import random
@@ -95,4 +96,31 @@ class Window:
         pick = lambda q: s[min(len(s) - 1, int(q * len(s)))]
         out = {"n": len(self.samples), "p50": pick(0.5), "p99": pick(0.99), "p999": pick(0.999), "max": s[-1]}
         self.samples = []
+        return out
+
+
+class Stalls:
+    """Longest garbage-collection pause and longest event-loop stall since the last read, in ms. Printed next to
+    the latency, so a slow second can be traced to this process (or ruled out) rather than guessed at."""
+
+    def __init__(self):
+        self.gc = self.loop = 0.0
+        self._t = 0.0
+        gc.callbacks.append(self._cb)
+
+    def _cb(self, phase, info):
+        if phase == "start":
+            self._t = time.perf_counter()
+        else:
+            self.gc = max(self.gc, (time.perf_counter() - self._t) * 1000)
+
+    async def watch(self):
+        while True:
+            t = time.perf_counter()
+            await asyncio.sleep(0.005)
+            self.loop = max(self.loop, (time.perf_counter() - t - 0.005) * 1000)
+
+    def read(self):
+        out = f"stall gc {self.gc:.0f}ms loop {self.loop:.0f}ms"
+        self.gc = self.loop = 0.0
         return out

@@ -29,7 +29,7 @@ from datetime import timedelta
 
 from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
-from common import (ALERTS, DEFAULT_URL, DOOR_OUTSIDE, PARTITIONS, READINGS, STREAM, TEMP_HIGH, Window, asset,
+from common import (ALERTS, DEFAULT_URL, DOOR_OUTSIDE, PARTITIONS, READINGS, STREAM, TEMP_HIGH, Stalls, Window, asset,
                     ensure_topics, load, msg, part, set_point, sites)
 
 WARM_DOOR = 0.04                    # deg C per second the cargo air warms with a door open (illustrative)
@@ -107,7 +107,7 @@ async def main(a):
             due.append((s.nxt, i, "open"))
     heapq.heapify(due)
     opened = {}                             # (asset, open seq) -> (door open for s, opened at ns), outside only
-    lat, stats = Window(), defaultdict(float)
+    lat, stats, stalls = Window(), defaultdict(float), Stalls()
     seen = set()                            # (asset, kind, ep) the driver app already has
 
     def reader(name):
@@ -215,12 +215,12 @@ async def main(a):
                   f"door alerts at the driver app {int(stats['door_alerts']):,}, while the door was still open "
                   f"{int(stats['while_open']):,} (at {a.compare_s:g} s it would be {int(stats['open_at_compare']):,})  "
                   f"temperature alerts {int(stats[TEMP_HIGH]):,}  "
-                  f"event-to-notifiers n {r['n']:,} p50 {r['p50']:.1f}ms p99 {r['p99']:.1f}ms", flush=True)
+                  f"event-to-notifiers n {r['n']:,} p50 {r['p50']:.1f}ms p99 {r['p99']:.1f}ms  {stalls.read()}", flush=True)
             for k in ("readings", "doors", "outside_opens", "door_alerts", "while_open", "open_at_compare",
                       DOOR_OUTSIDE, TEMP_HIGH):
                 stats[k] = 0
 
-    await asyncio.gather(gateway_loop(), report(), *(c.consume_messages(cb, asyncio.Event()) for c, cb in readers))
+    await asyncio.gather(gateway_loop(), report(), stalls.watch(), *(c.consume_messages(cb, asyncio.Event()) for c, cb in readers))
 
 
 if __name__ == "__main__":

@@ -20,7 +20,8 @@ wait || true
 echo "--- fleet.log";    head -n 3 fleet.log; tail -n 4 fleet.log
 echo "--- rules.log";    tail -n 6 rules.log
 echo "--- backfill.log"; head -n 2 backfill.log; tail -n 2 backfill.log
-echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" rules.log | cut -c1-140 || true
+echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" rules.log | cut -c1-400 || true
+echo "--- fleet stalls over 20 ms (line: output)"; grep -nE "stall gc ([2-9][0-9]|[0-9]{3,})ms|loop ([2-9][0-9]|[0-9]{3,})ms" fleet.log | sed -E "s/^([0-9]+):.*(stall.*)/\1: \2/" || true
 # Skip a 10 s warm-up while topics come online; a shared CI runner may blip, so require 95% of seconds to pass.
 steady=$(grep -E '\[alert-rules\] +[1-9][0-9,]* events/s' rules.log | tail -n +11 || true)
 live=$(grep -c 'PASS (' <<<"$steady" || true)
