@@ -7,6 +7,7 @@ it. It runs beside MSK, so the telematics pipeline, Flink, Event Watch and the d
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source
 engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.rivian-kit
 - **One slide:** [`LaserData_Rivian_VehicleState.pdf`](LaserData_Rivian_VehicleState.pdf)
 
 ## Why this use case
