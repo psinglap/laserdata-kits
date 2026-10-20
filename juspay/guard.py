@@ -62,7 +62,7 @@ async def main(a):
             return                          # history, not a payment happening now
         pid = o["pid"]
         if o["seq"] <= seen.get(pid, (0,))[0]:
-            stats["dropped"] += 1           # an older or repeated attempt: the newest status wins
+            stats["dropped"] += 1           # older or repeated attempt: newest wins
             return
         seen[pid] = (o["seq"], now)
         if g.get("run") != o["run"]:

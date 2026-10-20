@@ -72,9 +72,10 @@ async def main(a):
         if canary and st["defect"]:
             totals["since_defect"] += 1
             totals["failed_by_defect"] += bad
-        return pid, SendMessage(msg(run=run, pid=pid, seq=seq, rel=a.canary if canary else a.stable, canary=int(canary),
-                                    pm=pm, mid=f"M{random.randrange(a.merchants):05d}", status=status, code=code,
-                                    bad=int(bad)))
+        rel = a.canary if canary else a.stable
+        return pid, SendMessage(msg(run=run, pid=pid, seq=seq, rel=rel, canary=int(canary), pm=pm,
+                                    mid=f"M{random.randrange(a.merchants):05d}",
+                                    status=status, code=code, bad=int(bad)))
 
     async def send(items):
         # One batch per partition, all sent at once: per-payment order is kept, about one round trip per tick.
