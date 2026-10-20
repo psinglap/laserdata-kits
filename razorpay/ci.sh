@@ -20,8 +20,8 @@ timeout 72 python -u payments.py --payments-per-s 500 --surge 2.5 --surge-at 30 
 timeout 70 python -u workflow_flood.py --mbps 1 --at 20 --duration 35 > workflow.log 2>&1 &
 wait || true
 echo "--- payments.log"; head -n 2 payments.log; grep "incident" payments.log || true; tail -n 3 payments.log
-echo "--- downtime.log"; grep -E "started|resolved" downtime.log || true; tail -n 4 downtime.log
-echo "--- checkout.log"; grep "downtime" checkout.log || true; tail -n 4 checkout.log
+echo "--- downtime.log"; grep -E "\] (started|resolved) " downtime.log || true; tail -n 4 downtime.log
+echo "--- checkout.log"; grep -E "downtime (started|resolved)" checkout.log || true; tail -n 4 checkout.log
 echo "--- workflow.log"; head -n 2 workflow.log; tail -n 2 workflow.log
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" downtime.log checkout.log | cut -c1-160 || true
 # Skip a 10 s warm-up while topics come online; a shared CI runner may blip, so require 95% of seconds to pass.
