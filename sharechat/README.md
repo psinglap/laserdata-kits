@@ -6,6 +6,7 @@ never repeats it. It runs beside Redpanda and WarpStream, so nothing else has to
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/MUtzM9gcQu6BifQAE6tQ2e
 - **One slide:** [`LaserData_ShareChat_ViewedPosts.pdf`](LaserData_ShareChat_ViewedPosts.pdf)
 
 ## Why this use case
