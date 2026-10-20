@@ -7,6 +7,7 @@ the data platform and everything else stay where they are.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/YZwxdtdFBSVEtfXEYxgVtt
 - **One slide:** [`LaserData_Rapido_CaptainMatch.pdf`](LaserData_Rapido_CaptainMatch.pdf)
 
 ## Why this use case
