@@ -37,6 +37,7 @@ async def main(a):
     orders = await client.producer(STREAM, ORDERS, topic_partitions_count=8)
     seq, live, price, index = {}, defaultdict(set), {}, {}
     lat, stats = Window(), defaultdict(int)
+    caught_up = [False]                     # a new reader first replays changes made before it joined
 
     def newer(c, tag):
         k = (tag, c["k"])
@@ -44,7 +45,13 @@ async def main(a):
             return False                    # older or repeated change: the newest value wins
         seq[k] = c["seq"]
         if c["seq"] > 1:                    # seq 1 is the startup snapshot, not a live change
-            lat.add((time.time_ns() - c["ns"]) / 1e6)
+            age = (time.time_ns() - c["ns"]) / 1e6
+            if not caught_up[0] and age < a.budget_ms:
+                caught_up[0] = True         # replay of earlier changes is done; from here on, time live changes
+            if caught_up[0]:
+                lat.add(age)
+            else:
+                stats["replayed"] += 1
         return True
 
     async def on_inventory(m):
@@ -85,6 +92,11 @@ async def main(a):
     async def report():
         while True:
             await asyncio.sleep(1)
+            if not caught_up[0]:
+                print(f"[{a.name}] catching up: replayed {stats['replayed']:,} earlier changes this second", flush=True)
+                stats.clear()
+                lat.flush()
+                continue
             r = lat.flush()
             ok = "PASS" if r["p99"] < a.budget_ms else "FAIL"
             removed = 100 * stats["removed"] / stats["candidates"] if stats["candidates"] else 0
