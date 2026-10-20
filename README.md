@@ -9,3 +9,4 @@ Apache Iggy 0.9.0 broker on each push.
 | Zepto | Real-time hub stock and prices for search re-validation, beside MSK | [`zepto/`](zepto/) |
 | Swiggy | Delivery partner location pings for the tracking screen and last-mile ETA, beside Confluent | [`swiggy/`](swiggy/) |
 | Meesho | Order-update notifications into Meecom, kept ahead of sale-day campaigns, beside Confluent | [`meesho/`](meesho/) |
+| Zomato (Eternal) | Restaurant kitchen state for food preparation time predictions, beside Confluent Cloud | [`eternal/`](eternal/) |

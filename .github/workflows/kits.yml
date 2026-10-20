@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        account: [zepto, swiggy, meesho]
+        account: [zepto, swiggy, meesho, eternal]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
