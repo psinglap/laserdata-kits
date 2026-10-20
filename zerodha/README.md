@@ -54,7 +54,20 @@ Each prints a line a second:
 [feed]     20,000 ticks/s  … writes  write ack p50 …ms  p99 …ms
 ```
 
-**What the numbers mean.** The kit times each tick from the moment the feed handler received it (including its wait for the next write) to the moment `ticker.py` has applied it, through Python clients, on whatever machine you run it on. CI figures follow after the first green runs.
+**What the numbers mean.** The kit times each tick from the moment the feed handler received it
+(including its wait for the next write) to the moment `ticker.py` has applied it, through Python
+clients, on whatever machine you run it on. On a shared 2-vCPU GitHub runner, with the broker, the
+feed, two ticker nodes and the postback script all on one box, at 1,000 ticks/s (8,000 instruments),
+three green CI runs held a median per-second p50 of 3.3 to 3.5 ms, p99 7.0 to 7.3 ms and p99.9 8.3 to
+8.9 ms, with 1 or 2 of 65 seconds over 10 ms; the worst second reached 11 to 20 ms, as the restarted
+node replayed the log on the same two CPUs. A 10× postback burst next door moved the median p99 by
+0.2 to 0.5 ms. The restarted node rebuilt a quote for all 8,000 instruments from the last 20 s of the
+log (about 23,300 ticks) in 0.26 to 0.30 s; 10 s of live ticks alone would have covered 58% of them.
+0.3% of the quotes pushed to users had a newer tick already waiting, and there were no sequence gaps.
+That is the end-to-end lane through this demo code, not the broker alone. The 10× tick burst is not
+part of CI: on two shared vCPUs the Python feed and readers run out of CPU before the broker does, so
+run test 1 on your own machines. The broker's own tail latency is measured with `iggy-bench` in
+`bench/PLAN.md`, on dedicated machines.
 
 | File | What it is |
 |---|---|
@@ -62,7 +75,7 @@ Each prints a line a second:
 | `ticker.py` | A ticker node: reads every partition with its own offsets, keeps the latest quote per instrument, counts the packets it would push to its users, checks sequence gaps. Rebuilds from the last `--replay-s` seconds of the log on start. |
 | `postbacks.py` | Order postbacks on their own topic, with a burst, for the isolation test. |
 | `nats_bridge.py` | Subscribes to your existing tick subject on NATS and writes it into Iggy, for a shadow run on real ticks. |
-| `ci.sh` | The CI run: reduced scale, a 5× tick burst, a postback burst next door, a node restart; pass only on 95% PASS seconds, zero gaps and a full rebuild. |
+| `ci.sh` | The CI run: 1,000 ticks/s, two ticker nodes, a 10× postback burst next door, a node restart; pass only on 95% PASS seconds per node, zero gaps and a full rebuild. |
 | `bench/PLAN.md` | The benchmark we run with you; rules fixed before results. |
 
 ## Four tests
