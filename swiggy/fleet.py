@@ -113,8 +113,9 @@ async def main(a):
         batches = defaultdict(list)
         for key, m in items:
             batches[part(key, a.partitions)].append(m)
-        await asyncio.gather(*(producer.send_with_partitioning(ms, Partitioning.partition_id(pid))
-                               for pid, ms in batches.items()))
+        await asyncio.gather(*(
+            producer.send_with_partitioning(ms, Partitioning.partition_id(pid))
+            for pid, ms in batches.items()))
 
     async def ride():
         async with pings_p, legs_p:

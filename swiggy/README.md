@@ -1,1 +1,108 @@
-# placeholder
+# Live rider location and ETAs for Swiggy, on LaserData
+
+Every delivery partner's location ping reaches the tracking screen and the last-mile ETA in
+milliseconds, even in the Friday dinner rush. It runs beside Confluent, so orders, payments and
+everything else stay where they are.
+
+This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
+open-source engine LaserData builds and runs.
+
+- **One slide:** [`LaserData_Swiggy_RiderETA.pdf`](LaserData_Swiggy_RiderETA.pdf)
+
+## Why this use case
+
+From Swiggy's own posts:
+
+- The delivery partner app runs in the background for 4 to 5 hours a session and tracks location
+  "needed to assign trips, real-time tracking of an order, payment based on distance travelled"
+  (Swiggy Bytes, Nov 2019).
+- The tracking-screen ETA is four models, one per leg of the order, "refreshed at fixed time
+  intervals". The last-mile model computes current speed from the haversine distance between
+  successive delivery partner pings in a time window, and remaining distance from the latest ping
+  to the customer. Swiggy measures ETA accuracy and the share of orders with inaccurate ETA bumps
+  (Swiggy Bytes, May 2023).
+- Swiggy moved from self-run Kafka to Confluent Cloud and "calculates precise delivery times using
+  real-time location data" on it (Confluent and Swiggy, CIOL).
+- In #BehindTheBug (Aug 2022), a few partitions in the Kafka cluster shared by more than 50
+  order-fulfilment services went offline for 4 minutes and took down 18 services; the first page came
+  from the service that manages driver trips.
+
+So the number that decides whether the tracking screen and the last-mile ETA are working from
+where the partner actually is, is the latency of the ping stream. It is the highest-volume stream
+in the order journey and the one that is only useful for minutes. This kit runs that one lane on
+Apache Iggy, on its own, and prints its p99 every second.
+
+## Run it
+
+Needs Docker and Python 3.10+. Defaults: 60,000 delivery partners online in Bengaluru, a ping
+every 5 s (12,000 pings/s), ETAs refreshed every 10 s for every active order, traffic slowing near
+Silk Board.
+
+```
+docker compose up -d                 # Apache Iggy 0.9.0 on :8090
+pip install -r requirements.txt      # apache-iggy 0.9.0
+python fleet.py &                    # partners on the road: pings, trip legs, and the ETA check
+python track.py                      # tracking screen and last-mile ETA
+```
+
+Both print a line a second:
+
+```
+[track]  12,000 pings/s  ping-to-tracker p50 …ms  p99 …ms  p99.9 …ms  PASS (<200ms)  ETAs published …  active orders …
+[fleet]  12,000 pings/s  partners online 60,000  on a trip …  ETAs checked …  on the latest ping …%
+         one ping behind …%  two or more behind …%
+```
+
+`fleet.py` knows every ping it has sent, so it checks each ETA the tracker publishes: was it
+computed on the partner's latest ping, or on one the partner had already replaced? That share is
+the business cost of a slow lane: a dot that lags on the map and an ETA built on an old position.
+Add `--why` to `track.py` to split the latency into ping-to-broker and broker-to-tracker.
+
+**What the numbers mean.** The kit times each ping from the moment `fleet.py` creates it to the
+moment `track.py` has applied it, through Python clients, on whatever machine you run it on.
+On a shared 2-vCPU CI runner with the broker and all scripts on one box, at 2,000 pings/s
+(10,000 partners), it held about p50 12 ms, p99 28 to 30 ms and p99.9 37 ms (median of 50
+steady-state seconds), and 99.5% of ETAs were computed on the partner's latest ping; the rest were
+one ping behind, never two. A 20× retry storm on a neighbouring topic in the same run moved the
+lane's p99 from about 27 ms to 30 to 34 ms. That is the end-to-end lane through this demo code,
+not the broker alone, and it does not include the mobile network. The broker's own tail latency is measured with `iggy-bench` in
+`bench/PLAN.md`, on dedicated machines.
+
+| File | What it is |
+|---|---|
+| `fleet.py` | Delivery partners riding to restaurants and customers. Pings keyed by partner ID to `partner-pings`, with a per-partner sequence and the position itself; leg changes to `order-legs`. Checks every ETA against the truth. |
+| `track.py` | The tracking screen and last-mile ETA: recent pings per partner, current speed and remaining distance, an ETA for every active order every `--refresh` s, published to `eta`. |
+| `retry_storm.py` | A neighbour on the same broker: order events at a steady rate, then 100× for a minute, like the retries in #BehindTheBug. |
+| `confluent_bridge.py` | Copies your existing ping topic from Confluent Cloud into Iggy as a read-only consumer group, for a shadow run on real traffic. |
+| `bench/PLAN.md` | The benchmark we run with you; rules fixed before results. |
+
+## Three tests
+
+1. **Dinner rush in the rain:** `python fleet.py --rush 3 --rush-at 60 --rush-for 120`
+   (three times the partners online for two minutes). Pass: ping-to-tracker p99 under 200 ms, and
+   ETAs two or more pings behind under 0.1%.
+2. **A retry storm next door:** `python retry_storm.py --mbps 0.5 --x 100` while both run.
+   Pass: the lane's p99 moves by less than 10%. The script prints the rate it actually reached;
+   one Python process may not reach 100× on a laptop.
+3. **Rebuild the tracker:** stop `track.py` and start it again; it replays the retained pings and
+   trip legs. Pass: it catches up within seconds and ETAs return to the latest ping.
+
+## Shadow your own traffic
+
+```
+pip install confluent-kafka
+python confluent_bridge.py --bootstrap <bootstrap-server> --kafka-topic <your-ping-topic> \
+  -X security.protocol=SASL_SSL -X sasl.mechanisms=PLAIN -X sasl.username=<api-key> -X sasl.password=<api-secret>
+```
+
+The bridge only reads, as its own consumer group `iggy-shadow`; the partner app, its producers and
+every existing consumer are untouched. Map your record shape in `to_msg()`: the kit needs `k`
+(partner ID), `lat`, `lon`, and `order` if your pings carry it. With real pings, `track.py` reports
+ping-to-tracker latency straight away; ETAs also need your trip events on `order-legs`.
+
+## Next step
+
+If the numbers are interesting: a 2–4 week evaluation on one mirrored ping topic, alongside
+Confluent. No advantage, no migration.
+
+kranti@laserdata.com · laserdata.com
