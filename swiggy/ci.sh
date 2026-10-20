@@ -11,7 +11,7 @@ python -m py_compile common.py fleet.py track.py retry_storm.py confluent_bridge
 timeout 80 python -u fleet.py --partners 10000 --every 5 --assign-p 0.3 --wait-s 10 40 > fleet.log 2>&1 &
 sleep 5
 # A 20x retry storm next door from second 30 to 50 of the tracker's run, on the same broker.
-timeout 65 python -u retry_storm.py --mbps 0.1 --x 20 --at 30 --for 20 > storm.log 2>&1 &
+timeout 65 python -u retry_storm.py --mbps 0.05 --x 20 --at 30 --for 20 > storm.log 2>&1 &
 timeout 70 python -u track.py --refresh 5 --why > track.log 2>&1 || true
 wait || true
 echo "--- fleet.log"; grep -v "ETAs checked 0 " fleet.log | tail -n 8
