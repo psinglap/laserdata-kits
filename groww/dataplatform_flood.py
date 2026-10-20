@@ -24,17 +24,22 @@ async def main(a):
     p = await client.producer(STREAM, DATAPLATFORM, topic_partitions_count=PARTITIONS[DATAPLATFORM],
                               mode=DirectProducerConfig(batch_length=2000, linger_time=timedelta(milliseconds=5)))
     blob = os.urandom(a.size // 2).hex()        # stands in for a clickstream or market-data record
-    per_tick = max(1, int(a.mbps * 1e6 / a.size / 100))
+    per_s = a.mbps * 1e6 / a.size
     await asyncio.sleep(max(0.0, a.at))
     print(f"[dataplatform] starting: ~{a.mbps:g} MB/s on '{DATAPLATFORM}'", flush=True)
     gc.freeze()
-    due = t0 = start = time.monotonic()
-    sent = 0
+    due = t0 = start = last = time.monotonic()
+    sent, owed = 0, 0.0
     async with p:
         while not a.duration or time.monotonic() - start < a.duration:
-            await p.send_with_partitioning([SendMessage(msg(kind="event", v=blob)) for _ in range(per_tick)],
-                                           Partitioning.balanced())
-            sent += per_tick
+            now = time.monotonic()
+            owed += per_s * (now - last)        # by elapsed time, so a slow send means a bigger next batch
+            last, n = now, int(owed)
+            owed -= n
+            if n:
+                await p.send_with_partitioning([SendMessage(msg(kind="event", v=blob)) for _ in range(n)],
+                                               Partitioning.balanced())
+            sent += n
             if time.monotonic() - t0 >= 1:
                 print(f"[dataplatform] {sent:,} msgs/s  ~{sent * a.size / 1e6:.1f} MB/s", flush=True)
                 sent, t0 = 0, time.monotonic()

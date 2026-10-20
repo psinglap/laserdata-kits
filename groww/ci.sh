@@ -42,6 +42,9 @@ if burst:
 missed = num(r"missing the new fill ([0-9.]+)%", r)
 print("post-trade refreshes: %d s checked, %.0f refreshes in all, missing the new fill: median %.3f%%, worst second %.3f%%" % (
     len(r), sum(num(r"refreshes ([0-9,]+)", r)), st.median(missed), max(missed)))
+d = [l for l in open("dataplatform.log") if re.search(r"\] +[1-9][0-9,]* msgs/s", l)]
+if d:
+    print("DataPlatform neighbour: %d s, median %.1f MB/s on its own topic" % (len(d), st.median(num(r"~([0-9.]+) MB/s", d))))
 if len(r) < 30:
     raise SystemExit("too few seconds with post-trade refreshes checked")
 if st.median(missed) > 0.1:
