@@ -20,3 +20,4 @@ Apache Iggy 0.9.0 broker on each push.
 | JioHotstar | Playback health signals: minimized heartbeats by cohort and CDN into the health check, and CDN health signals out to routing and alerting, beside Kafka | [`jiohotstar/`](jiohotstar/) |
 | ShareChat | Viewed posts into the feed dedup service before the next feed request, beside Redpanda and WarpStream | [`sharechat/`](sharechat/) |
 | ZEE5 | Continue Watching heartbeats: playback position into the resume point a viewer gets on their next device, beside Confluent Cloud and ScyllaDB | [`zee5/`](zee5/) |
+| MoEngage | Smart Trigger events, one topic per workspace: trigger events into the campaign evaluator at each brand's own rate, beside self-run Kafka | [`moengage/`](moengage/) |
