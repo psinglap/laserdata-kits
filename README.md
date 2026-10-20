@@ -26,3 +26,4 @@ Apache Iggy 0.9.0 broker on each push.
 | The Trade Desk | Spend-to-pacing loop: every win's spend into the pacing controllers, and their pause and throttle decisions back to every bid server, beside Kafka | [`the-trade-desk/`](the-trade-desk/) |
 | Magnite | DSP appetite lane for traffic shaping: which DSPs are bidding on which supply, to every shaping node, with rebuild from the log, beside Kafka | [`magnite/`](magnite/) |
 | Braze | Currents connector lane: engagement events on one topic per connector, each read at its partner's pace from its own offset, so one partner's outage or rate limit delays only its own export, beside Kafka | [`braze/`](braze/) |
+| PubMatic | CTV household frequency lane: every impression to every ad server before that household's next ad decision, so caps hold across screens and servers, with rebuild from the log, beside Kafka | [`pubmatic/`](pubmatic/) |
