@@ -29,7 +29,7 @@ async def main(a):
         while True:
             t = time.monotonic() - t0
             x = a.x if a.at <= t < a.at + a.for_s else 1
-            per_tick = max(1, int(a.mbps * x * 1e6 / a.size / 100))
+            per_tick = max(1, int(a.mbps * x * 1e6 / a.size / 50))
             ms = [SendMessage(msg(order=f"O{random.randrange(10**9):09d}", ev="order.confirm", v=body)) for _ in range(per_tick)]
             # spread the tick over partitions and send the chunks at once, so a storm is not paced by one round trip
             chunks = [ms[i::a.partitions] for i in range(a.partitions)]
@@ -40,7 +40,7 @@ async def main(a):
                 state = f"storm {x:g}x" if x > 1 else "steady"
                 print(f"[storm] {state}  {sent:,} msgs/s  ~{sent * a.size / 1e6:.1f} MB/s on '{STORM}'", flush=True)
                 sent, mark = 0, time.monotonic()
-            due = max(due + 0.01, time.monotonic() - 0.1)        # never bank more than 100 ms of catch-up
+            due = max(due + 0.02, time.monotonic() - 0.1)        # never bank more than 100 ms of catch-up
             await asyncio.sleep(max(0.0, due - time.monotonic()))   # behind schedule: send back to back
 
 

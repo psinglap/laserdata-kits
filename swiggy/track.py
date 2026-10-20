@@ -33,16 +33,18 @@ async def main(a):
         print("[track] waiting for fleet.py to create the topics…", flush=True)
         await asyncio.sleep(1)
     started_ns = time.time_ns()
-    poll = dict(batch_length=5000, auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+    poll = dict(batch_length=5000, auto_commit=AutoCommit.Disabled())
     async def connected():
         # One connection per reader and writer, so a busy one never queues behind another.
         c = IggyClient.from_connection_string(a.url)
         await c.connect()
         return c
     pings = await (await connected()).consumer_group(f"track-pings-{os.getpid()}", STREAM, PINGS,
-                                                    polling_strategy=PollingStrategy.First(), **poll)
+                                                    polling_strategy=PollingStrategy.First(),
+                                                    poll_interval=timedelta(microseconds=500), **poll)
     legs = await (await connected()).consumer_group(f"track-legs-{os.getpid()}", STREAM, LEGS,
-                                                   polling_strategy=PollingStrategy.First(), **poll)
+                                                   polling_strategy=PollingStrategy.First(),
+                                                   poll_interval=timedelta(milliseconds=5), **poll)   # trip legs change every few minutes
     out = await client.producer(STREAM, ETA, topic_partitions_count=ETA_PARTITIONS)
     recent = defaultdict(lambda: deque(maxlen=a.window))     # partner -> recent (seq, ns, lat, lon, order)
     trip = {}                                                # partner -> [order, leg, pickup, drop]

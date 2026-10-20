@@ -21,7 +21,7 @@ from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, IggyExpiry
 
 from common import CITY, DEFAULT_URL, ETA, LEGS, PINGS, SILK_BOARD, STREAM, km, load, msg, part, partner
 
-TICK = 0.01   # seconds
+TICK = 0.02   # seconds; each partner still pings on its own schedule, stamped when sent
 
 
 class Partner:
@@ -58,7 +58,7 @@ async def main(a):
     await checker.connect()
     etas = await checker.consumer_group("fleet-eta-check", STREAM, ETA, polling_strategy=PollingStrategy.Next(),
                                        batch_length=2000, auto_commit=AutoCommit.Interval(timedelta(seconds=1)),
-                                       poll_interval=timedelta(microseconds=500))
+                                       poll_interval=timedelta(milliseconds=5))   # a check, not on the lane's clock
 
     pool = [Partner(i) for i in range(int(a.partners * max(1.0, a.rush)))]
     by_id = {p.id: p for p in pool}
