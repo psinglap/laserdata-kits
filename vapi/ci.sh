@@ -18,7 +18,7 @@ sleep 3
 timeout 72 python -u call_workers.py --workers 4 --calls 6000 > calls.log 2>&1 &
 timeout 70 python -u call_log_flood.py --mbps 2 --at 20 --duration 35 > logs.log 2>&1 &
 wait || true
-echo "--- calls.log";  head -n 3 calls.log; grep "incident " calls.log || true; tail -n 3 calls.log
+echo "--- calls.log";  head -n 3 calls.log; grep "\] incident " calls.log || true; tail -n 3 calls.log
 echo "--- health.log"; grep -- "->" health.log || true; tail -n 4 health.log
 echo "--- logs.log";   head -n 2 logs.log; tail -n 2 logs.log
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" health.log | cut -c1-140 || true
@@ -50,7 +50,7 @@ deg, ok = sum(nums(r"degraded ([0-9,]+),", h)), sum(nums(r", ok ([0-9,]+)\)", h)
 print("verdicts in steady state: degraded %d, ok %d" % (deg, ok))
 if deg < 3 or ok < 2:
     raise SystemExit("the evaluator did not mark the planted incidents degraded and recovered")
-inc = [l for l in open("calls.log") if "incident " in l]
+inc = [l for l in open("calls.log") if "onset to verdict" in l]
 if len(inc) < 3:
     raise SystemExit("fewer than 3 incidents reached every call worker")
 print("incidents seen by every worker: %d  onset to verdict median %.0f ms  verdict to all workers median %.1f ms, max %.1f ms" % (
