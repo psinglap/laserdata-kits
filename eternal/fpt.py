@@ -14,6 +14,7 @@ every kitchen by replaying the topic, so it holds no state; replayed events are 
 """
 import argparse
 import asyncio
+import gc
 import os
 import statistics
 import time
@@ -52,6 +53,7 @@ async def main(a):
     out = await client.producer(STREAM, ORDERS, topic_partitions_count=ORDER_PARTITIONS,
                                 mode=DirectProducerConfig(batch_length=1000, linger_time=timedelta(microseconds=200)))
     pop = Popularity(a.restaurants, a.skew)
+    gc.freeze()            # startup tables live all run; keep them out of later GC passes
     view, lat, stats = {}, Window(), defaultdict(int)
     to_broker, from_broker, gc_pause = Window(), Window(), GcPauses()     # where the time goes (--why)
 
@@ -91,8 +93,12 @@ async def main(a):
                 await asyncio.sleep(max(0.0, due - time.monotonic()))
 
     async def report():
+        frozen = False
         while True:
             await asyncio.sleep(1)
+            if not frozen and len(view) >= a.restaurants:
+                gc.freeze()        # every kitchen is in the view: freeze it once, as kitchens.py does after its snapshot
+                frozen = True
             r = lat.flush()
             ok = "PASS" if r["p99"] < a.budget_ms else "FAIL"
             print(f"[fpt] {r['n']:>6,} kitchen events/s  event-to-feature-view p50 {r['p50']:6.1f}ms  p99 {r['p99']:6.1f}ms  "

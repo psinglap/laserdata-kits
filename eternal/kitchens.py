@@ -13,6 +13,7 @@ made on a stale kitchen view: the cost of a slow lane.
 """
 import argparse
 import asyncio
+import gc
 import heapq
 import random
 import time
@@ -120,6 +121,7 @@ async def main(a):
                 await flush()
         await flush()
         stats["events"] = 0
+        gc.freeze()        # the kitchens built at startup live all run; keep them out of later GC passes
         print(f"[kitchens] snapshot: {a.restaurants:,} kitchens, {a.in_kitchen:,} orders already cooking", flush=True)
 
     async def on_order(m):
