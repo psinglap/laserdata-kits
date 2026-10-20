@@ -84,8 +84,9 @@ async def main(a):
                 st["ok"] += 1
             elif e["a"] >= a.max_attempts:
                 dead.append(e)
-            else:
-                backoff.append((time.monotonic() + a.backoff_ms * e["a"] / 1000, pid, e))
+            else:                                         # back on failed-writes after a backoff
+                due = time.monotonic() + a.backoff_ms * e["a"] / 1000
+                backoff.append((due, pid, e))
         if dead:
             await writer.send_messages(STREAM, DLQ, Partitioning.partition_id(0),
                                        [SendMessage(msg(**{**e, "ns": time.time_ns()})) for e in dead])

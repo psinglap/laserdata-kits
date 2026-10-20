@@ -61,8 +61,9 @@ async def main(a):
                 total["id"] += 1
                 bad = random.random() < a.reject_share
                 total["rejected"] += bad
+                event = random.choice(EVENTS[lane])
                 batches[pid].append(SendMessage(msg(
-                    ns=ns, t0=ns, id=f"{a.name}-{total['id']:x}", pf=profile, p=lane, e=random.choice(EVENTS[lane]),
+                    ns=ns, t0=ns, id=f"{a.name}-{total['id']:x}", pf=profile, p=lane, e=event,
                     a=1, src=a.name, seq=seq[pid], why="timeout", bad=int(bad), props=props)))
             if batches:
                 # One batch per partition, all sent at once on this publisher's connection.
