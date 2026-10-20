@@ -56,12 +56,14 @@ Run several with `--share N` to split the campaign.
 
 **What the numbers mean.** The kit times each order update from the moment `order_services.py`
 creates it to the moment Meecom's sender has it, through Python clients, on whatever machine you run
-it on. On a shared 2-vCPU GitHub runner, with the broker and four Python processes on one box, at
-1,000 order updates a second (12,000 orders a minute) it holds about p50 12 ms and p99 24 ms; while a
-campaign is queued next door at 5,000 sends a second, p99 was about 37 ms, and 100% of order updates
-were sent within 1 s with none out of date. That is the end-to-end lane through this demo code, not
-the broker alone. The broker's own tail latency and cost per billion messages are measured with
-`iggy-bench` on dedicated machines (`bench/PLAN.md`).
+it on. On a shared 2-vCPU GitHub runner, with the broker and four Python processes on one box, six CI
+runs at 1,000 order updates a second (12,000 orders a minute) held p50 12 to 18 ms, p99 24 to 41 ms and
+p99.9 26 to 48 ms over 62 steady-state seconds each, with at most one second over the 200 ms budget.
+While a 100,000-recipient campaign was queued next door at 5,000 sends a second, the median per-second
+p99 was 24 to 56 ms (23 to 33 ms without it); the campaign drained at its 2,500/s limit and waited up
+to 25 s in its own queue. Every order update was sent within 1 s, and none was out of date when sent.
+That is the end-to-end lane through this demo code, not the broker alone. The broker's own tail latency
+and cost per billion messages are measured with `iggy-bench` on dedicated machines (`bench/PLAN.md`).
 
 | File | What it is |
 |---|---|
