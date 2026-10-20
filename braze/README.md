@@ -68,16 +68,16 @@ connector whose partner is down or throttling, its backlog on its own topic, its
 long it took to catch up.
 
 **What the numbers mean.** The kit times each event from the moment `router.py` routes it to the
-moment its connector has read it, through Python clients, on whatever machine you run it on. In CI
-on a shared 2-vCPU GitHub runner, with the broker and four Python processes on one box, at 3,000
+moment its connector has read it, through Python clients, on whatever machine you run it on. On a
+shared 2-vCPU GitHub runner, with the broker and four Python processes on one box, at 3,000
 engagement events a second (about 4,500 a second after routing) across 68 connector topics with
-4 MB/s of raw events next door, both shards held p50 13 to 15 ms, p99 32 ms and p99.9 35 ms (medians
-per second) over 68 steady-state seconds each, with no second over the 100 ms budget (worst second
-39 ms) and no event lost. While app-0002-storage's partner was down for 15 s and the connector then
-drained at a 1,500 events/s rate limit, the other connectors on its shard kept a median per-second
-p99 of 31.6 ms (32.1 ms otherwise); app-0002-storage's backlog peaked at 4,475 events on its own
-topic, its oldest event waited 15.0 s, and it caught up 21.0 s after its partner went down, with 0
-events lost. That is the end-to-end lane through this demo code, not the broker alone. The broker's
+4 MB/s of raw events next door, two CI runs held p50 13 to 15 ms, p99 27 to 32 ms and p99.9 30 to
+35 ms (medians per second) over 68 to 69 steady-state seconds per shard, with no second over the
+100 ms budget (worst second 42 ms) and no event lost. While app-0002-storage's partner was down for
+15 s and the connector then drained at a 1,500 events/s rate limit, the other connectors on its shard
+kept a median per-second p99 of 26 to 32 ms (27 to 32 ms otherwise); app-0002-storage's backlog
+peaked at 4,471 to 4,475 events on its own topic, its oldest event waited 15.0 s, and it caught up
+21.0 s after its partner went down, with 0 events lost. That is the end-to-end lane through this demo code, not the broker alone. The broker's
 own tail latency, how many connector topics a cluster carries comfortably, and cost per billion
 events are measured with `iggy-bench` on dedicated machines (`bench/PLAN.md`).
 
