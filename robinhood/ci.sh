@@ -21,9 +21,10 @@ timeout 70 python -u settlement_backfill.py --mbps 2 --at 20 --duration 35 > set
 wait || true
 echo "--- ledger.log"; head -n 1 ledger.log; sed -n '40,41p' ledger.log; tail -n 2 ledger.log
 for n in 1 2; do echo "--- standin-$n.log"; head -n 3 standin-$n.log; tail -n 3 standin-$n.log; done
+echo "--- ledger seconds with a tick started or sent over 50 ms late"; grep -nE "(late|send) max ([5-9][0-9]|[0-9]{3,})ms" ledger.log | sed -E 's/requests.*undecided [0-9,]+//' || true
 echo "--- settlement.log"; head -n 2 settlement.log; tail -n 2 settlement.log
 for n in 1 2; do
-  echo "--- standin-$n FAIL seconds (line: output)"; grep -n "FAIL (" standin-$n.log | cut -c1-150 || true
+  echo "--- standin-$n FAIL seconds (line: output)"; grep -n "FAIL (" standin-$n.log | sed -E 's/  decided.*accounts//' || true
   # Skip a 10 s warm-up; a shared CI runner may blip, so require 95% of steady-state seconds to pass.
   steady=$(grep -E "\[standin-$n\] +[1-9][0-9,]* changes/s" standin-$n.log | tail -n +11 || true)
   live=$(grep -c 'PASS (' <<<"$steady" || true)

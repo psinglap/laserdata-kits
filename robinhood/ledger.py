@@ -134,7 +134,10 @@ async def main(a):
                 reqs.append(request(rng.choice(keys), int(rng.lognormvariate(7.5, 1.0)), "other"))
             owed_r -= int(owed_r)
             # The tick's state changes and requests go out together, each writer on its own connection.
+            t_send = time.monotonic()
             await asyncio.gather(send(lane, STATE, changes), send(req_w, REQUESTS, reqs))
+            st["send_ms"] = max(st["send_ms"], 1000 * (time.monotonic() - t_send))
+            st["late_ms"] = max(st["late_ms"], 1000 * (t_send - due))    # how late this tick started
             st["changes"] += len(changes)
             st["open"] = int(bool(opening))
             due += 0.01
@@ -171,7 +174,8 @@ async def main(a):
                   f"(approved {st['approved_bad']:,} declined {st['declined_bad']:,})  "
                   f"a cache {a.lag:g}s behind would disagree on {lag:,} "
                   f"(approved {st['lag_approved_bad']:,} declined {st['lag_declined_bad']:,})  "
-                  f"undecided {st['undecided']:,}", flush=True)
+                  f"undecided {st['undecided']:,}  tick late max {st['late_ms']:.0f}ms  send max {st['send_ms']:.0f}ms",
+                  flush=True)
             st.clear()
 
     await asyncio.gather(run(), decisions.consume_messages(on_decision, asyncio.Event()), report())

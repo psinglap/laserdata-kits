@@ -54,8 +54,11 @@ async def main(a):
     async def read_lane():
         who = {p: Consumer.Single(f"{me}-{p}") for p in range(P)}
         nxt, done = {}, set()
+        last = time.monotonic()
         while True:
-            more = False
+            now_m = time.monotonic()
+            st["gap_ms"] = max(st["gap_ms"], 1000 * (now_m - last))    # longest pass over all partitions
+            last, more = now_m, False
             for p in range(P):
                 ms = await reader.poll_messages(STREAM, STATE, consumer=who[p], partition_id=p, count=a.batch,
                                                 auto_commit=False,
@@ -131,7 +134,8 @@ async def main(a):
             ok = "idle" if not r["n"] else "PASS" if r["p99"] < a.budget_ms else "FAIL"
             print(f"[{a.name}] {r['n']:>6,} changes/s  change-to-cache p50 {r['p50']:5.1f}ms  p99 {r['p99']:5.1f}ms  "
                   f"p99.9 {r['p999']:5.1f}ms  {ok} (<{a.budget_ms:g}ms)  decided approved {st['approved']:,} "
-                  f"declined {st['declined']:,}  expired {st['expired']:,}  cache {len(cache):,} accounts", flush=True)
+                  f"declined {st['declined']:,}  expired {st['expired']:,}  cache {len(cache):,} accounts  "
+                  f"read pass max {st['gap_ms']:.0f}ms", flush=True)
             st.clear()
 
     await asyncio.gather(read_lane(), age_lagged_cache(), take_requests(), send_decisions(), report())
