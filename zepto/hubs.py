@@ -26,6 +26,11 @@ async def main(a):
     inv_p = await client.producer(STREAM, INVENTORY, **durable)
     price_p = await client.producer(STREAM, PRICING, **durable)
     status_p = await client.producer(STREAM, STATUS, topic_partitions_count=8, mode=cfg)
+    if await client.get_topic(STREAM, ORDERS) is None:      # revalidate.py may not have created it yet
+        try:
+            await client.create_topic(STREAM, ORDERS, 8)
+        except RuntimeError:
+            pass                                             # created by revalidate.py in the meantime
     orders = await client.consumer_group("hubs", STREAM, ORDERS, polling_strategy=PollingStrategy.Next(), batch_length=1000,
                                          auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(microseconds=500))
     keys = [key(h, s) for h in range(a.hubs) for s in range(a.skus)]

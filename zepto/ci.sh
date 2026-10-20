@@ -13,6 +13,9 @@ timeout 70 python -u revalidate.py --refresh 5 --searches-per-s 100 > revalidate
 wait || true
 echo "--- hubs.log";       tail -n 8 hubs.log
 echo "--- revalidate.log"; tail -n 8 revalidate.log
-grep -q "PASS" revalidate.log
+live=$(grep -Ec '\[revalidate\] +[1-9][0-9,]* changes/s.*PASS' revalidate.log || true)
+fail=$(grep -Ec '\[revalidate\] +[1-9][0-9,]* changes/s.*FAIL' revalidate.log || true)
+echo "seconds with live traffic: PASS $live, FAIL $fail"
+[ "$live" -ge 20 ] && [ "$fail" -eq 0 ]
 grep -Eq "orders accepted [1-9]" hubs.log
 echo "Kit OK on Apache Iggy 0.9.0"
