@@ -18,7 +18,7 @@ from datetime import timedelta
 
 from apache_iggy import DirectProducerConfig, IggyClient, Partitioning, SendMessage
 
-from common import CAMPAIGN, DEFAULT_URL, PARTITIONS, STREAM, channel, ensure_topics, msg
+from common import CAMPAIGN, CHANNELS, DEFAULT_URL, PARTITIONS, STREAM, channel, ensure_topics
 
 
 async def main(a):
@@ -29,6 +29,7 @@ async def main(a):
     p = await client.producer(STREAM, CAMPAIGN, topic_partitions_count=parts,
                               mode=DirectProducerConfig(batch_length=2000, linger_time=timedelta(milliseconds=1)))
     body = os.urandom(a.size // 2).hex()              # stands in for the merged template and user data
+    tails = {ch: b'","ch":"%s","v":"%s"}' % (ch.encode(), body.encode()) for ch, _ in CHANNELS}
     per_s = a.recipients / (a.minutes * 60) / a.share
     total = int(a.recipients / a.share)
     await asyncio.sleep(max(0.0, a.at))
@@ -42,8 +43,9 @@ async def main(a):
             n = min(int(owed), total - sent)
             owed -= n
             if n:
-                ms = [SendMessage(msg(r=f"U{random.randrange(10**9):09d}", ch=channel(), tpl="sale-day", v=body))
-                      for _ in range(n)]
+                # Same shape as msg(), built cheaply: one timestamp per tick, only the recipient and channel vary.
+                head = b'{"ns":%d,"tpl":"sale-day","r":"U' % time.time_ns()
+                ms = [SendMessage(head + b"%09d" % random.randrange(10**9) + tails[channel()]) for _ in range(n)]
                 chunks = [ms[i::parts] for i in range(parts)]        # spread over partitions, sent at once
                 await asyncio.gather(*(p.send_with_partitioning(c, Partitioning.partition_id(pid))
                                        for pid, c in enumerate(chunks) if c))

@@ -37,6 +37,7 @@ async def main(a):
     common = dict(batch_length=5000, auto_commit=AutoCommit.Interval(timedelta(seconds=1)),
                   polling_strategy=PollingStrategy.Next(), init_retries=10, init_retry_interval=timedelta(seconds=1))
     lat, camp_wait, stats = Window(), Window(), defaultdict(int)
+    to_broker, from_broker, loop_lag = Window(), Window(), Window()     # where the time goes (--why)
     last_seq = {}
     pending = defaultdict(list)                      # receipts waiting for the next flush, by partition
     bucket = {"tokens": 0.0, "at": time.monotonic()}
@@ -51,6 +52,9 @@ async def main(a):
         now = time.time_ns()                         # here a real sender hands the message to the channel vendor
         if u["ns"] >= started_ns:
             lat.add((now - u["ns"]) / 1e6)
+            if a.why:
+                to_broker.add(m.timestamp() / 1e3 - u["ns"] / 1e6)
+                from_broker.add(now / 1e6 - m.timestamp() / 1e3)
         stats["sent_" + u["ch"]] += 1
         pending[part(u["k"], PARTITIONS[RECEIPTS])].append(SendMessage(msg(k=u["k"], seq=u["seq"], sent_ns=now)))
 
@@ -64,8 +68,9 @@ async def main(a):
                 break
             # out of tokens: wait for 20 ms worth at once, so a throttled reader wakes 50 times a second, not per message
             await asyncio.sleep(max(0.001, (a.campaign_per_s / 50 - bucket["tokens"]) / a.campaign_per_s))
-        c = load(m.payload())
-        camp_wait.add((time.time_ns() - c["ns"]) / 1e6)
+        b = m.payload()
+        ns = int(b[6:b.index(b",")]) if b.startswith(b'{"ns":') else load(b)["ns"]     # only the timestamp is needed
+        camp_wait.add((time.time_ns() - ns) / 1e6)
         stats["campaign"] += 1
 
     async def flush_receipts(receipts):
@@ -96,6 +101,10 @@ async def main(a):
                 print(f"[meecom] {r['n']:>6,} order updates/s  change-to-sender p50 {r['p50']:6.1f}ms  p99 {r['p99']:6.1f}ms  "
                       f"p99.9 {r['p999']:6.1f}ms  {ok} (<{a.budget_ms}ms)  campaign topic +{grow:,}/s  "
                       f"repeats dropped {stats['dropped']}  [{ch}]", flush=True)
+                if a.why:
+                    tb, fb, ll = to_broker.flush(), from_broker.flush(), loop_lag.flush()
+                    print(f"[why]   change->broker p50 {tb['p50']:.1f} p99 {tb['p99']:.1f}  broker->sender p50 {fb['p50']:.1f} "
+                          f"p99 {fb['p99']:.1f}  sender event-loop lag p99 {ll['p99']:.1f} max {ll['max']:.1f} ms", flush=True)
                 if prev:
                     print(f"[broker] CPU {st.cpu_usage:5.1f}% of one core  {now[1] - prev[1]:,} messages written/s "
                           f"on all topics", flush=True)
@@ -106,7 +115,15 @@ async def main(a):
                       f"waited in the queue p50 {w['p50'] / 1e3:5.1f} s  max {w['max'] / 1e3:5.1f} s", flush=True)
             stats.clear()
 
+    async def lag():
+        while True:
+            t = time.monotonic()
+            await asyncio.sleep(0.01)
+            loop_lag.add((time.monotonic() - t - 0.01) * 1e3)
+
     stop = asyncio.Event()
+    if a.why:
+        tasks.append(lag())
     if a.only in ("both", "orders"):
         updates = await (await connected(a.url)).consumer_group("meecom-order-updates", STREAM, ORDER_UPDATES,
                                                                poll_interval=timedelta(microseconds=500), **common)
@@ -124,5 +141,6 @@ if __name__ == "__main__":
     p.add_argument("--url", default=DEFAULT_URL)
     p.add_argument("--only", choices=("both", "orders", "campaign"), default="both", help="which reader this process runs")
     p.add_argument("--budget-ms", type=int, default=200, help="order update, from the change to Meecom's sender")
+    p.add_argument("--why", action="store_true", help="also print where the time goes: change to broker, broker to sender")
     p.add_argument("--campaign-per-s", type=float, default=200_000, help="per-client rate limit for campaign sends")
     asyncio.run(main(p.parse_args()))

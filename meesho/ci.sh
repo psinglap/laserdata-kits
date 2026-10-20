@@ -11,7 +11,7 @@ pip install -q -r requirements.txt
 python -m py_compile common.py order_services.py meecom_sender.py campaign.py confluent_bridge.py
 # Meecom's sender starts first and creates the topics; the services and the campaign follow.
 # Order updates and campaign sends are read by separate processes, like transactional and campaign workers.
-timeout 75 python -u meecom_sender.py --only orders > meecom.log 2>&1 &
+timeout 75 python -u meecom_sender.py --only orders --why > meecom.log 2>&1 &
 timeout 75 python -u meecom_sender.py --only campaign --campaign-per-s 2500 > meecom-campaign.log 2>&1 &
 sleep 3
 timeout 72 python -u order_services.py --orders-per-min 12000 > orders.log 2>&1 &
@@ -22,7 +22,8 @@ echo "--- orders.log";   grep -v "receipts checked 0 " orders.log | tail -n 6
 echo "--- meecom.log";   tail -n 10 meecom.log
 echo "--- meecom-campaign.log"; grep -v " 0 campaign sends/s" meecom-campaign.log | tail -n 3
 echo "--- campaign.log"; head -n 3 campaign.log; tail -n 2 campaign.log
-echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" meecom.log | cut -c1-120 || true
+echo "--- FAIL seconds (line: output, then where the time went)"; grep -n -A1 "FAIL (" meecom.log | cut -c1-130 || true
+echo "--- broker CPU while the campaign is queued"; grep -A2 "campaign topic +[1-9]" meecom.log | grep "^\[broker\]" | head -n 5 || true
 # Skip a 10 s warm-up while topics come online; a shared CI runner may blip, so require 95% of seconds to pass.
 steady=$(grep -E '\[meecom\] +[1-9][0-9,]* order updates/s' meecom.log | tail -n +11 || true)
 live=$(grep -c 'PASS (' <<<"$steady" || true)
