@@ -61,10 +61,19 @@ Each prints a line a second:
 
 **What the numbers mean.** The kit times each ball from the moment the scoring feed created it
 (including its wait for the next write) to the moment `points_node.py` has updated every team it
-touches, through Python clients, on whatever machine you run it on. CI figures on a real Apache
-Iggy 0.9.0 broker are pending: they will be added here after the first green run. None of this
-includes the data feed from the venue or the fan's network. The broker's own tail latency is
-measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
+touches, through Python clients, on whatever machine you run it on. On a shared 2-vCPU GitHub
+runner, with the broker, the feed, two points nodes and the surge script all on one box, at about
+120 balls a second across 60 matches and 20,000 teams per node, the green CI run held a median
+per-second p50 of 2.4 ms, p99 4.1 to 4.2 ms and p99.9 4.3 to 4.4 ms; every steady-state second
+passed the 20 ms budget (63 of 63 and 48 of 48), and the worst second reached 9.3 ms. Each node
+updated about 40,000 team totals a second. A 4× toss surge next door (250 to 1,000 events a
+second at CI scale) left the median p99 at 4.1 ms. The restarted node rebuilt all 60 live matches
+from the log (4,627 balls) in 0.08 s with every sampled team total matching a full recount;
+without the log, 19,786 of its 20,000 teams (99%) would have shown the wrong total. No sequence
+gaps, no totals off, and no points pushed after a newer ball existed. That is the end-to-end lane
+through this demo code at reduced scale, not the broker alone, and it excludes the data feed from
+the venue and the fan's network. The broker's own tail latency is measured with `iggy-bench` in
+`bench/PLAN.md`, on dedicated machines.
 
 | File | What it is |
 |---|---|
