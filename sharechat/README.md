@@ -66,15 +66,16 @@ job has the views in the database; older views stay the database's job.
 
 **What the numbers mean.** The kit times each flush from the moment `app.py` sends it to the moment
 `dedup.py` has applied it, through Python clients, on whatever machine you run it on. On a shared
-GitHub runner (2 vCPU), with the broker and three Python processes on one box, a green CI run at
-2,500 views a second (500 flushes, 2× for 15 s as the peak) held p50 12.3 ms, p99 23.9 ms and
-p99.9 25.6 ms (median per second over 63 steady-state seconds, no second over the 50 ms budget).
-Through the peak (1,000 flushes a second) the median per-second p99 was 24.7 ms, worst 26.2 ms.
-Of 21,204 next-page feed requests, none missed the user's last flush and no repeats were served;
-dedup removed 42,410 just-viewed candidates. A 1 MB/s engagement stream ran next door for 33 s.
-That is the end-to-end lane through this demo code at reduced scale, not the broker alone; the
-broker's own tail latency is measured with `iggy-bench` on dedicated machines (`bench/PLAN.md`).
-On a laptop or a larger machine, raise the rates.
+GitHub runner (2 vCPU), with the broker and three Python processes on one box, two green CI runs at
+2,500 views a second (500 flushes, 2× for 15 s as the peak) held p50 12.2 to 12.3 ms, p99 23.9 to
+24.0 ms and p99.9 25.5 to 25.6 ms (median per second over 63 steady-state seconds each, no second
+over the 50 ms budget). Through the peak (1,000 flushes a second) the median per-second p99 was
+24.5 to 24.7 ms, worst 26.2 ms. Of about 21,000 next-page feed requests in each run, none missed
+the user's last flush and no repeats were served; dedup removed about 42,000 just-viewed candidates
+per run. A 1 MB/s engagement stream ran next door for 33 s. That is the end-to-end lane through
+this demo code at reduced scale, not the broker alone; the broker's own tail latency is measured
+with `iggy-bench` on dedicated machines (`bench/PLAN.md`). On a laptop or a larger machine, raise
+the rates.
 
 | File | What it is |
 |---|---|
