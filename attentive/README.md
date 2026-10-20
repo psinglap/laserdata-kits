@@ -70,15 +70,17 @@ writes it to the moment its decision worker has decided it, through Python clien
 machine you run it on. On a shared 2-vCPU GitHub runner, with the broker and five Python processes on
 one box, at 3,000 shopping events a second from 200,000 subscribers on 16 partitions (about 230
 sessions a second with two or more triggers, 6,000 events a second for the first 15 s), two workers,
-and 10,000 campaign texts a second next door from second 30, CI held event-to-decision p50 9.2 ms,
-p99 17.2 to 17.4 ms and p99.9 18.4 ms (medians per second) over 70 steady-state seconds per worker.
-69 of 70 seconds per worker were inside the 50 ms budget; the one that wasn't (p99 81 to 116 ms) was
-the same second on both workers, a pause on the runner. Median p99 was 16.7 to 17.1 ms before the
-campaign blast and 17.2 to 17.4 ms during it. Event to send-intent, through the worker to the send
-side, held p50 20.6 ms and p99 34.0 ms. Each worker queued about 140 texts a second and held about
-190 repeat triggers a second; across 26,499 subscribers texted, the send side counted 0 duplicate
-texts and 0 subscribers decided by two workers, and no event was out of order, missing or on another
-partition. Checkout reminders stayed at 0 because every checkout in the kit's sessions follows an add
+and 10,000 campaign texts a second next door from second 30, two CI runs held event-to-decision p50
+8.6 to 9.2 ms, p99 16.7 to 17.4 ms and p99.9 18.1 to 18.4 ms (medians per second) over 70
+steady-state seconds per worker. 69 of 70 seconds per worker were inside the 50 ms budget in each run;
+the one that wasn't (p99 81 to 200 ms) was the same second on both workers, near the end of the run.
+That happened in every run at about the same point, so it may be the broker or the runner doing
+periodic work rather than random noise; we have not found the cause. Median p99 was 16.7 to 17.4 ms
+both before the campaign blast and during it. Event to send-intent, through the worker to the send
+side, held p50 20.2 to 20.6 ms and p99 33.1 to 34.0 ms. Each worker queued about 140 texts a second
+and held about 190 repeat triggers a second; across about 26,500 subscribers texted per run, the send
+side counted 0 duplicate texts and 0 subscribers decided by two workers, and no event was out of
+order, missing or on another partition. Checkout reminders stayed at 0 because every checkout in the kit's sessions follows an add
 to cart that already queued a text. That is the end-to-end lane through this demo code, not the broker
 alone. An earlier version of the kit polled idle partitions every 2 ms on two connections per worker;
 on one runner it missed the budget in 43 of 65 seconds, most likely because that polling competed with
