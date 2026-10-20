@@ -13,11 +13,14 @@ python -m py_compile common.py kitchens.py fpt.py replay_flood.py confluent_clou
 timeout 80 python -u kitchens.py --restaurants 20000 --in-kitchen 3000 --minute 1 > kitchens.log 2>&1 &
 sleep 5
 timeout 65 python -u replay_flood.py --mbps 4 --at 30 --for 20 > replay.log 2>&1 &
-timeout 70 python -u fpt.py --restaurants 20000 --orders-per-s 300 > fpt.log 2>&1 || true
+timeout 70 python -u fpt.py --restaurants 20000 --orders-per-s 300 --why > fpt.log 2>&1 || true
 wait || true
 echo "--- kitchens.log"; tail -n 8 kitchens.log
 echo "--- fpt.log";      tail -n 8 fpt.log
-echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" fpt.log | cut -c1-120 || true
+echo "--- FAIL seconds, with where the time went (line: output)"; grep -n -A1 "FAIL (" fpt.log | cut -c1-150 || true
+echo "--- kitchens.log, slowest send per second above 100 ms"; grep -n -E "slowest send [0-9]{3,} ms" kitchens.log | sed -E 's/.*(slowest send.*)/\1/' | head -n 10 || true
+echo "--- broker log lines about saving or flushing"; docker compose logs --no-color --timestamps iggy 2>/dev/null | grep -i -E "sav|flush|fsync|segment|slow|warn" | tail -n 25 || true
+echo "--- kitchens.log / fpt.log wall clock start"; head -n 1 kitchens.log; date -u
 # Skip a 10 s warm-up while topics come online; a shared CI runner may blip, so require 95% of seconds to pass.
 steady=$(grep -E '\[fpt\] +[1-9][0-9,]* kitchen events/s' fpt.log | tail -n +11 || true)
 live=$(grep -c 'PASS (' <<<"$steady" || true)

@@ -99,8 +99,10 @@ async def main(a):
     async def flush():
         batches = {pid: ms for pid, ms in pending.items() if ms}
         pending.clear()
+        t = time.monotonic()
         await asyncio.gather(*(lane.send_with_partitioning(ms, Partitioning.partition_id(pid))
                                for pid, ms in batches.items()))
+        stats["slowest_send_ms"] = max(stats["slowest_send_ms"], int((time.monotonic() - t) * 1000))
 
     async def snapshot():
         # The start of a dinner rush: orders already cooking, then one state message per kitchen (seq 1).
@@ -150,8 +152,8 @@ async def main(a):
             cooking = sum(len(k.cooking) for k in kitchens.values())
             print(f"[kitchens] {stats['events']:>6,} kitchen events/s  predictions checked {n:>5,}/s  "
                   f"made on a stale kitchen view {pct:6.3f}%  (all: {stats['total_stale']:,} of {stats['total_checked']:,})  "
-                  f"orders accepted {stats['accepted']:,}  cooking {cooking:,}", flush=True)
-            stats["events"] = stats["checked"] = stats["stale"] = 0
+                  f"orders accepted {stats['accepted']:,}  cooking {cooking:,}  slowest send {stats['slowest_send_ms']} ms", flush=True)
+            stats["events"] = stats["checked"] = stats["stale"] = stats["slowest_send_ms"] = 0
 
     await asyncio.gather(kitchen_clock(), orders.consume_messages(on_order, asyncio.Event()), report())
 

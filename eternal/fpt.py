@@ -53,6 +53,7 @@ async def main(a):
                                 mode=DirectProducerConfig(batch_length=1000, linger_time=timedelta(microseconds=200)))
     pop = Popularity(a.restaurants, a.skew)
     view, lat, stats = {}, Window(), defaultdict(int)
+    to_broker, from_broker = Window(), Window()           # where the time goes (--why)
 
     async def on_kitchen(m):
         e = load(m.payload())
@@ -61,7 +62,11 @@ async def main(a):
             return                          # older or repeated change: the newest state wins
         view[e["r"]] = e
         if e["seq"] > 1 and e["ns"] >= started_ns:      # seq 1 is the snapshot; replayed history is a rebuild
-            lat.add((time.time_ns() - e["ns"]) / 1e6)
+            now = time.time_ns()
+            lat.add((now - e["ns"]) / 1e6)
+            if a.why:
+                to_broker.add(m.timestamp() / 1e3 - e["ns"] / 1e6)
+                from_broker.add(now / 1e6 - m.timestamp() / 1e3)
 
     async def checkout():
         n, owed, t0 = 0, 0.0, time.monotonic()
@@ -94,6 +99,10 @@ async def main(a):
                   f"p99.9 {r['p999']:6.1f}ms  {ok} (<{a.budget_ms}ms)  FPT predictions {stats['predictions']:,}  "
                   f"kitchens in view {len(view):,}", flush=True)
             stats.clear()
+            if a.why:
+                tb, fb = to_broker.flush(), from_broker.flush()
+                print(f"[why] kitchen->broker p50 {tb['p50']:.1f} p99 {tb['p99']:.1f} max {tb['max']:.1f}  "
+                      f"broker->feature view p50 {fb['p50']:.1f} p99 {fb['p99']:.1f} max {fb['max']:.1f} ms", flush=True)
 
     await asyncio.gather(lane.consume_messages(on_kitchen, asyncio.Event()), checkout(), report())
 
@@ -108,4 +117,5 @@ if __name__ == "__main__":
     p.add_argument("--rush-at", type=float, default=0)
     p.add_argument("--rush-for", type=float, default=120)
     p.add_argument("--budget-ms", type=int, default=100)
+    p.add_argument("--why", action="store_true", help="also print where the time goes: kitchen to broker, broker to view")
     asyncio.run(main(p.parse_args()))
