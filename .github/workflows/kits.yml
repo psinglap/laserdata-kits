@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        account: [zepto, swiggy, meesho, eternal, rapido, porter, groww, phonepe, razorpay, zerodha, juspay]
+        account: [zepto, swiggy, meesho, eternal, rapido, porter, groww, phonepe, razorpay, zerodha, juspay, jiohotstar]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
