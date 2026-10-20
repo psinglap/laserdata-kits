@@ -55,12 +55,11 @@ async def main(a):
         view[k] = (p["seq"], p["qty"], p["avg"])
         etag_dirty.add(p["u"])              # the next Holdings request rebuilds instead of returning 304
         age = (time.time_ns() - p["ns"]) / 1e6
-        if not caught_up[0] and age < a.budget_ms:
-            caught_up[0] = True             # replay of earlier fills is done; from here on, time live fills
         if caught_up[0]:
             lat.add(age)
-        else:
+        else:                               # still replaying: track the oldest fill seen this second
             stats["replayed"] += 1
+            stats["max_age"] = max(stats["max_age"], age)
 
     async def on_order_update(m):
         o = load(m.payload())
@@ -82,8 +81,12 @@ async def main(a):
         while True:
             await asyncio.sleep(1)
             if not caught_up[0]:
+                # caught up once a whole second of fills arrived inside the budget; partitions interleave,
+                # so one fresh fill alone doesn't mean the replay is finished
+                if stats["replayed"] and stats["max_age"] < a.budget_ms:
+                    caught_up[0] = True
                 print(f"[{a.name}] catching up: replayed {stats['replayed']:,} earlier fills this second", flush=True)
-                stats["replayed"] = 0
+                stats["replayed"] = stats["max_age"] = 0
                 lat.flush()
                 continue
             r = lat.flush()
