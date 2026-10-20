@@ -7,6 +7,7 @@ It runs beside Kafka and ClickHouse, so nothing else has to move.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs. Apache Iggy is written in Rust, like Hyperswitch.
 
+- **Write-up:** https://claude.ai/artifact/6nnfNd3urErwZAooDoVm2R
 - **One slide:** [`LaserData_Juspay_ReleaseGuard.pdf`](LaserData_Juspay_ReleaseGuard.pdf)
 
 ## Why this use case
