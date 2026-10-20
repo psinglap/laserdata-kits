@@ -6,6 +6,7 @@ sent twice, even at peak. It runs beside your billing pipeline, so nothing else 
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/9gA8sbg2EU28SUQEMSExWF
 - **One slide:** [`LaserData_Deepgram_StreamingUsage.pdf`](LaserData_Deepgram_StreamingUsage.pdf)
 
 ## Why this use case
