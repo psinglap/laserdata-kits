@@ -6,6 +6,7 @@ milliseconds, even in a live-sports spike. It runs beside Kafka, so nothing else
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/5gXaza3Wyw1BSnMDnpKU1F
 - **One slide:** [`LaserData_TheTradeDesk_SpendPacing.pdf`](LaserData_TheTradeDesk_SpendPacing.pdf)
 
 ## Why this use case
