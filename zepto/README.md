@@ -39,6 +39,13 @@ Both print a line a second:
 [hubs] orders accepted …  rejected as sold out …  shown-but-gone …%
 ```
 
+**What the numbers mean.** The kit times each change from the moment `hubs.py` creates it to the
+moment `revalidate.py` has applied it, through Python clients, on whatever machine you run it on.
+On a shared 2-vCPU CI runner with the broker and both scripts on one box, it holds about
+p50 12 ms and p99 24 ms at 2,000 changes/s. That is the end-to-end lane through this demo code, not
+the broker alone. The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`,
+on dedicated machines.
+
 | File | What it is |
 |---|---|
 | `hubs.py` | Stock and price per `hub:sku`, published to the `inventory` and `pricing` topics with a per-key sequence and the resulting value. Accepts or rejects orders against true stock. |
