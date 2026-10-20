@@ -47,7 +47,7 @@ def door_minutes():
 
 
 class Asset:
-    __slots__ = ("a", "seq", "door", "door_ns", "temp", "sp", "t", "pos", "fault", "ep")
+    __slots__ = ("a", "seq", "door", "door_ns", "temp", "sp", "t", "pos", "fault", "ep", "nxt")
 
     def __init__(self, a):
         self.a, self.seq, self.door, self.door_ns = a, 0, 0, 0
@@ -57,6 +57,7 @@ class Asset:
         self.pos = self.transit()
         self.fault = 0.0                    # monotonic time until which the reefer unit is failing
         self.ep = 0                         # sequence of the door-open event of the current opening
+        self.nxt = 0.0                      # when the next door opening is due
 
     def transit(self):
         lat, lon = random.choice(sites(self.a))
@@ -102,7 +103,8 @@ async def main(a):
             s.temp = min(AMBIENT, s.temp + WARM_DOOR * ago)
             due.append((now + held - ago, i, "close"))
         else:
-            due.append((now + random.expovariate(1 / door_gap), i, "open"))
+            s.nxt = now + random.expovariate(1 / door_gap)
+            due.append((s.nxt, i, "open"))
     heapq.heapify(due)
     opened = {}                             # (asset, open seq) -> (door open for s, opened at ns), outside only
     lat, stats = Window(), defaultdict(float)
@@ -139,15 +141,27 @@ async def main(a):
     gc.freeze()                             # keep start-up objects out of the collector's way
 
     async def gateway_loop():
-        t0 = tick = time.monotonic()
+        t0 = tick = last = time.monotonic()
+        extra = 0.0
         async with producer:
             while True:
                 now = time.monotonic()
                 x_peak = a.peak if a.peak_at <= now - t0 < a.peak_at + a.peak_for else 1
                 batches = defaultdict(list)
+                if x_peak > 1:              # the peak: bring extra door openings forward, at (peak - 1) x the base rate
+                    extra += (x_peak - 1) * a.assets / door_gap * (now - last)
+                    while extra >= 1:
+                        extra -= 1
+                        j = random.randrange(a.assets)
+                        if not assets[j].door:
+                            assets[j].nxt = now
+                            heapq.heappush(due, (now, j, "open"))
+                last = now
                 while due and due[0][0] <= now:
-                    _, i, kind = heapq.heappop(due)
+                    t, i, kind = heapq.heappop(due)
                     s = assets[i]
+                    if kind == "open" and (s.door or t != s.nxt):
+                        continue            # superseded by an opening the peak brought forward
                     temp = s.warm(now)
                     s.seq += 1
                     if kind == "reading":
@@ -174,7 +188,8 @@ async def main(a):
                     else:                    # close: the door shuts and the asset drives on
                         s.door, s.door_ns = 0, time.time_ns()
                         s.pos = s.transit()
-                        heapq.heappush(due, (now + random.expovariate(x_peak / door_gap), i, "open"))
+                        s.nxt = now + random.expovariate(1 / door_gap)
+                        heapq.heappush(due, (s.nxt, i, "open"))
                         stats["doors"] += 1
                     batches[pid[i]].append(SendMessage(msg(
                         a=s.a, seq=s.seq, k="reading" if kind == "reading" else "door", door=s.door,
