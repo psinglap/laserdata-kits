@@ -57,11 +57,12 @@ compose up -d` between runs, since the per-tenant sequence restarts at 1.
 **What the numbers mean.** Receive-to-queryable runs from the moment `collectors.py` builds a
 batch to the moment ClickHouse confirms the insert that contains it, through Python clients. In CI
 (a shared 2-vCPU GitHub runner, with Apache Iggy, ClickHouse and every script on one box, 10,000
-records/s), with the first writer killed by SIGKILL at 30 s and ClickHouse frozen for 12 s: 1,100,000
-records accepted, 1,100,000 in ClickHouse, none lost; collector accept p99 median 2.8 ms over all
-106 s, freeze included, never 50 ms or more; writer receive-to-queryable about p50 169 ms and p99
-312 ms (58 of 58 steady-state seconds inside 1 s), most of it the 250 ms insert interval by design;
-the 132,500 rows that waited during the freeze drained in one second. That is the end-to-end path
+records/s), with the first writer killed by SIGKILL at 30 s and ClickHouse frozen for 12 s, over two
+green runs: 1,100,000 records accepted, 1,100,000 in ClickHouse, none lost; collector accept p99
+median 2.0–2.8 ms over all 106 s, freeze included, with at most 2 seconds at 50 ms or more (worst
+192 ms); writer receive-to-queryable about p50 162–169 ms and p99 300–312 ms (58 of 58 steady-state
+seconds inside 1 s), most of it the 250 ms insert interval by design; the rows that waited during the
+freeze (about 130,000) drained within a second of ClickHouse coming back. That is the end-to-end path
 through this demo code, not the broker alone. The broker's own tail latency is measured with
 `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
 
