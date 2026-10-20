@@ -54,7 +54,16 @@ They print a line a second:
 show the vehicle's latest report, or one the vehicle had already replaced, and if so, did the owner see the
 wrong lock or charging state? That is the business cost of a slow lane.
 
-@@NUMBERS@@
+**What the numbers mean.** The kit times each report from the moment `vehicles.py` creates it to the
+moment `vehicle_state.py` has applied it, through Python clients, on whatever machine you run it on. On a
+shared 2-vCPU CI runner with the broker and all scripts on one box, at 3,000 reports/s (15,000 vehicles) and
+300 app opens a second, a green run held p50 11.2 ms, p99 21.8 ms and p99.9 23.8 ms (median of 62
+steady-state seconds), with no failing second. 3 MB/s of full signal reports on the topic next door moved the
+lane's p99 from 21.6 to 21.8 ms. Of 18,308 app opens checked against the truth (11,171 of them right after a
+lock or charging change), every one showed the vehicle's latest report, and none showed the wrong lock or
+charging state. That is the end-to-end lane through this demo code, not the broker alone, and it does not
+include the cellular network. The broker's own tail latency is measured with `iggy-bench` in
+`bench/PLAN.md`, on dedicated machines.
 
 | File | What it is |
 |---|---|

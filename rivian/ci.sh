@@ -60,6 +60,11 @@ print("app reads checked: %d (%d right after a lock or charge change)  on the la
       "two or more behind %.3f%%  (median per second, %d s)  wrong lock or charge state shown: %d in total" % (
         checked, after, st.median(nums(r"latest report +([0-9.]+)%", v)), st.median(nums(r"one behind +([0-9.]+)%", v)),
         st.median(nums(r"two or more behind +([0-9.]+)%", v)), len(v), wrong))
+per = [(float(re.search(r"checked ([0-9,]+)", l).group(1).replace(",", "")),
+        float(re.search(r"one behind +([0-9.]+)%", l).group(1)), float(re.search(r"two or more behind +([0-9.]+)%", l).group(1)))
+       for l in v if re.search(r"one behind +[0-9.]+%.*two or more behind +[0-9.]+%", l)]
+print("app reads one report behind: %d in total; two or more behind: %d in total" % (
+    round(sum(c * b1 / 100 for c, b1, _ in per)), round(sum(c * b2 / 100 for c, _, b2 in per))))
 if st.median(nums(r"two or more behind +([0-9.]+)%", v)) > 0.1:
     raise SystemExit("too many app reads showed a state two or more reports old")
 e = [l for l in open("signals.log") if re.search(r"\] +[1-9][0-9,]* msgs/s", l)]
