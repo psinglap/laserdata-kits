@@ -32,6 +32,9 @@ from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioni
 from common import (ALERTS, DEFAULT_URL, DOOR_OUTSIDE, PARTITIONS, READINGS, STREAM, TEMP_HIGH, Window, asset,
                     ensure_topics, load, msg, part, set_point, sites)
 
+WARM_DOOR = 0.04                    # deg C per second the cargo air warms with a door open (illustrative)
+WARM_FAULT = 0.01                   # ... and with a failing reefer unit
+AMBIENT = 25.0                      # it never warms past the outside air
 NOTIFIERS = ["driver-app", "fleet-dashboard", "webhooks", "ops-console", "integrations", "reports"]
 
 
@@ -65,7 +68,7 @@ class Asset:
         pulls it back to the set point."""
         dt, self.t = now - self.t, now
         if self.door or now < self.fault:
-            self.temp += (0.03 if self.door else 0.01) * dt
+            self.temp = min(AMBIENT, self.temp + (WARM_DOOR if self.door else WARM_FAULT) * dt)
         else:
             self.temp += (self.sp - self.temp) * min(1.0, 0.01 * dt)
         return round(self.temp + random.uniform(-0.2, 0.2), 1)
@@ -87,7 +90,19 @@ async def main(a):
     door_gap = a.door_every_min * 60        # mean seconds between door openings per asset
     now = time.monotonic()
     due = [(now + random.uniform(0, a.reading_s), i, "reading") for i in range(a.assets)]
-    due += [(now + random.expovariate(1 / door_gap), i, "open") for i in range(a.assets)]
+    mean_open = 0.7 * 55 + 0.3 * 510        # mean seconds a door stays open, from door_minutes()
+    for i, s in enumerate(assets):
+        # Start mid-shift: at any moment some doors are already open, opened a while ago at an approved site.
+        if random.random() < mean_open / (mean_open + door_gap):
+            held = door_minutes() * 60
+            ago = random.uniform(0, held)
+            s.seq, s.door, s.ep = 1, 1, 1
+            s.door_ns = time.time_ns() - int(ago * 1e9)
+            s.pos = random.choice(sites(s.a))
+            s.temp = min(AMBIENT, s.temp + WARM_DOOR * ago)
+            due.append((now + held - ago, i, "close"))
+        else:
+            due.append((now + random.expovariate(1 / door_gap), i, "open"))
     heapq.heapify(due)
     opened = {}                             # (asset, open seq) -> (door open for s, opened at ns), outside only
     lat, stats = Window(), defaultdict(float)
