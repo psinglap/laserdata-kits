@@ -6,6 +6,7 @@ even in a live-sports break. It runs beside Kafka, so nothing else has to move.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source
 engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/WzPCpKgzMx9AY7F8M2RB9A
 - **One slide:** [`LaserData_PubMatic_HouseholdFrequency.pdf`](LaserData_PubMatic_HouseholdFrequency.pdf)
 
 ## Why this use case
