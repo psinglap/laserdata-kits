@@ -21,7 +21,7 @@ PICKUP_AREAS = {                           # where goods are loaded: markets and
 VEHICLES = {
     "2W":         (0.60, (18, 30), (60, 300)),     # share, speed range, loading/unloading seconds
     "3W":         (0.12, (14, 24), (180, 600)),
-    "TATA_ACE":   (0.18, (12, 22), (300, 900)),
+    "MINI_TRUCK": (0.18, (12, 22), (300, 900)),
     "PICKUP_8FT": (0.10, (10, 20), (300, 1200)),
 }
 FENCE_KM = 0.15                            # a driver within 150 m of the pickup or drop has reached it
