@@ -8,12 +8,12 @@ docker compose up -d
 for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; sleep 1; done
 pip install -q -r requirements.txt
 python -m py_compile common.py fleet.py track.py retry_storm.py confluent_bridge.py
-timeout 80 python -u fleet.py --partners 10000 --every 5 --assign-p 0.3 --wait-s 10 40 > fleet.log 2>&1 &
+KIT_DEBUG=1 timeout 80 python -u fleet.py --partners 10000 --every 5 --assign-p 0.3 --wait-s 10 40 > fleet.log 2>&1 &
 sleep 5
-timeout 70 python -u track.py --refresh 5 > track.log 2>&1 || true
+KIT_DEBUG=1 timeout 70 python -u track.py --refresh 5 > track.log 2>&1 || true
 wait || true
-echo "--- fleet.log"; tail -n 8 fleet.log
-echo "--- track.log"; tail -n 8 track.log
+echo "--- fleet.log"; grep -v debug fleet.log | tail -n 8; grep debug fleet.log | tail -n 30
+echo "--- track.log"; grep -v debug track.log | tail -n 8; grep debug track.log | head -n 60
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" track.log | cut -c1-120 || true
 # Skip a 10 s warm-up while topics come online; a shared CI runner may blip, so require 95% of seconds to pass.
 steady=$(grep -E '\[track\] +[1-9][0-9,]* pings/s' track.log | tail -n +11 || true)

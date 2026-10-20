@@ -40,6 +40,7 @@ async def main(a):
     recent = defaultdict(lambda: deque(maxlen=a.window))     # partner -> recent (seq, ns, lat, lon, order)
     trip = {}                                                # partner -> [order, leg, pickup, drop]
     lat, stats = Window(), defaultdict(int)
+    to_broker, from_broker, loop_lag = Window(), Window(), Window()     # where the time goes (KIT_DEBUG=1)
 
     async def on_ping(m):
         p = load(m.payload())
@@ -48,7 +49,10 @@ async def main(a):
             return                          # older or repeated ping: the newest position wins
         r.append((p["seq"], p["ns"], p["lat"], p["lon"], p.get("order")))
         if p["ns"] >= started_ns:           # replayed history is a rebuild, not live latency
-            lat.add((time.time_ns() - p["ns"]) / 1e6)
+            now = time.time_ns()
+            lat.add((now - p["ns"]) / 1e6)
+            to_broker.add(m.timestamp() / 1e3 - p["ns"] / 1e6)
+            from_broker.add(now / 1e6 - m.timestamp() / 1e3)
 
     async def on_leg(m):
         e = load(m.payload())
@@ -104,9 +108,19 @@ async def main(a):
                   f"p99.9 {r['p999']:6.1f}ms  {ok} (<{a.budget_ms}ms)  ETAs published {stats['etas']:,}  "
                   f"active orders {len(trip):,}", flush=True)
             stats.clear()
+            if os.environ.get("KIT_DEBUG"):
+                tb, fb, ll = to_broker.flush(), from_broker.flush(), loop_lag.flush()
+                print(f"[debug] ping->broker p50 {tb['p50']:.1f} p99 {tb['p99']:.1f}  broker->tracker p50 {fb['p50']:.1f} "
+                      f"p99 {fb['p99']:.1f}  event-loop lag p99 {ll['p99']:.1f} max {ll['max']:.1f} ms", flush=True)
+
+    async def lag():
+        while True:
+            t = time.monotonic()
+            await asyncio.sleep(0.01)
+            loop_lag.add((time.monotonic() - t - 0.01) * 1e3)
 
     stop = asyncio.Event()
-    await asyncio.gather(pings.consume_messages(on_ping, stop), legs.consume_messages(on_leg, stop), refresh(), report())
+    await asyncio.gather(pings.consume_messages(on_ping, stop), legs.consume_messages(on_leg, stop), refresh(), report(), lag())
 
 
 if __name__ == "__main__":
