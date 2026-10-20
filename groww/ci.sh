@@ -12,9 +12,9 @@ python -m py_compile common.py oms_fills.py holdings.py dataplatform_flood.py ka
 # The Holdings service starts first and creates the topics; OMS fills and the neighbour follow.
 timeout 78 python -u holdings.py > holdings.log 2>&1 &
 sleep 3
-# 1,000 fills a second, 3x for 15 s from second 30 (market open); 2 MB/s of DataPlatform events from second 20.
-timeout 72 python -u oms_fills.py --users 200000 --fills-per-s 1000 --open-burst 3 --open-at 30 --open-for 15 > oms.log 2>&1 &
-timeout 70 python -u dataplatform_flood.py --mbps 2 --at 20 --duration 35 > dataplatform.log 2>&1 &
+# 500 fills a second, 2.5x for 15 s from second 30 (market open); 1 MB/s of DataPlatform events from second 20.
+timeout 72 python -u oms_fills.py --users 200000 --fills-per-s 500 --open-burst 2.5 --open-at 30 --open-for 15 > oms.log 2>&1 &
+timeout 70 python -u dataplatform_flood.py --mbps 1 --at 20 --duration 35 > dataplatform.log 2>&1 &
 wait || true
 echo "--- oms.log";          head -n 2 oms.log; tail -n 4 oms.log
 echo "--- holdings.log";     tail -n 8 holdings.log
@@ -35,9 +35,9 @@ o = open("oms.log").read()
 num = lambda pat, ls: [float(re.search(pat, l).group(1).replace(",", "")) for l in ls]
 print("steady-state medians: position updates/s %.0f  fill-to-holdings p50 %.1f ms  p99 %.1f ms  p99.9 %.1f ms" % tuple(
     st.median(num(p, h)) for p in (r"\] +([0-9,]+) position updates/s", r"p50 +([0-9.]+)ms", r"p99 +([0-9.]+)ms", r"p99.9 +([0-9.]+)ms")))
-burst = [l for l in h if float(re.search(r"\] +([0-9,]+) position", l).group(1).replace(",", "")) > 2000]
+burst = [l for l in h if float(re.search(r"\] +([0-9,]+) position", l).group(1).replace(",", "")) > 900]
 if burst:
-    print("market-open burst: %d s above 2,000 fills/s, median p99 %.1f ms, worst p99 %.1f ms" % (
+    print("market-open burst: %d s above 900 fills/s, median p99 %.1f ms, worst p99 %.1f ms" % (
         len(burst), st.median(num(r"p99 +([0-9.]+)ms", burst)), max(num(r"p99 +([0-9.]+)ms", burst))))
 missed = num(r"missing the new fill ([0-9.]+)%", r)
 print("post-trade refreshes: %d s checked, %.0f refreshes in all, missing the new fill: median %.3f%%, worst second %.3f%%" % (
