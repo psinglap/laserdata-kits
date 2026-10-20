@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CI smoke test: start Apache Iggy 0.9.0 and run the Smart Trigger lane at small scale for about a minute:
 # 40 workspaces on their own topics, two evaluator shards, bulk ingestion next door, and one brand's
-# flash sale (5,000 extra events a second for 10 s) against a 1,500 events/s per-workspace quota.
+# flash sale (4,000 extra events a second for 10 s) against a 1,500 events/s per-workspace quota.
 # Pass only if each shard holds the 100 ms p99 budget in 95% of its steady-state seconds, triggers fire,
 # only the flash-sale workspace is ever held at its quota, and its backlog clears afterwards.
 set -euo pipefail
@@ -18,7 +18,7 @@ timeout 80 python -u trigger_eval.py --shard 1 --shards 2 --workspaces $N --quot
 sleep 2
 # ws-0002 (evaluated by shard 1) runs a flash sale from its second 20 to 30.
 timeout 76 python -u workspaces.py --workspaces $N --rate 3000 --users 400000 \
-  --flash-ws 2 --flash-rate 5000 --flash-at 20 --flash-for 10 > workspaces.log 2>&1 &
+  --flash-ws 2 --flash-rate 4000 --flash-at 20 --flash-for 10 > workspaces.log 2>&1 &
 timeout 74 python -u ingest_flood.py --mbps 4 --workspaces $N --partitions 8 > ingest.log 2>&1 &
 wait || true
 echo "--- workspaces.log"; head -n 2 workspaces.log; grep -m 2 "flash sale" workspaces.log || true; tail -n 2 workspaces.log

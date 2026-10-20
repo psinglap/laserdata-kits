@@ -24,6 +24,8 @@ from collections import defaultdict
 
 from apache_iggy import Consumer, Partitioning, PollingStrategy, SendMessage
 
+BANK = 0.5                                                # seconds of quota a partition may bank for a burst
+
 from common import (CAMPAIGNS, DEFAULT_URL, FIRES, FIRES_PARTITIONS, STREAM, Window, connect, ensure_topic, load, msg,
                     partitions_for, ws_name)
 
@@ -43,7 +45,7 @@ async def main(a):
     await ensure_topic(admin, STREAM, FIRES, FIRES_PARTITIONS)
     plist = [(t, pid) for t, parts in mine.items() for pid in range(parts)]
     per_part = {(t, pid): a.quota / mine[t] for t, pid in plist}     # events/s per partition
-    tokens = {k: per_part[k] * 0.1 for k in plist}       # up to 100 ms of quota banked
+    tokens = {k: per_part[k] * BANK for k in plist}
     refilled = {k: time.monotonic() for k in plist}
     nxt, live, held_at = {}, set(), {}                    # next offset; partitions past their replay; when last held
     last_seq = {}
@@ -95,12 +97,10 @@ async def main(a):
             more = False
             for k in parts:
                 now = time.monotonic()
-                tokens[k] = min(per_part[k] * 0.1, tokens[k] + (now - refilled[k]) * per_part[k])
+                tokens[k] = min(per_part[k] * BANK, tokens[k] + (now - refilled[k]) * per_part[k])
                 refilled[k] = now
                 allow = min(a.batch, int(tokens[k]))
                 if allow < 1:
-                    held_at[k[0]] = time.time_ns()        # out of quota: the rest waits on the workspace's own topic
-                    clear.setdefault(k[0], time.monotonic())
                     continue
                 start = PollingStrategy.Offset(nxt[k]) if k in nxt else PollingStrategy.First()
                 ms = await c.poll_messages(STREAM, k[0], consumer=consumers[k], partition_id=k[1],
@@ -108,6 +108,9 @@ async def main(a):
                 if ms:
                     tokens[k] -= len(ms)
                     nxt[k] = ms[-1].offset() + 1
+                    if len(ms) == allow < a.batch:        # the quota, not the topic, ended this read:
+                        held_at[k[0]] = time.time_ns()    # the rest waits on the workspace's own topic
+                        clear.setdefault(k[0], time.monotonic())
                     apply(k[0], k[1], ms, time.time_ns())
                     more = more or len(ms) == a.batch     # a full batch inside quota: read on at once
             if not more:
