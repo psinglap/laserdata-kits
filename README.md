@@ -12,3 +12,4 @@ Apache Iggy 0.9.0 broker on each push.
 | Zomato (Eternal) | Restaurant kitchen state for food preparation time predictions, beside Confluent Cloud | [`eternal/`](eternal/) |
 | Rapido | On-duty captain location for ride matching and pickup tracking, beside Kafka | [`rapido/`](rapido/) |
 | Porter | Driver-partner location pings for the live tracking link and pickup and drop arrivals, beside Cloud Pub/Sub | [`porter/`](porter/) |
+| Groww | Position updates from OMS fills into the Holdings service, inside the app's post-trade refresh, beside Strimzi Kafka | [`groww/`](groww/) |
