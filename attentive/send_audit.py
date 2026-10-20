@@ -84,6 +84,6 @@ if __name__ == "__main__":
     p.add_argument("--url", default=DEFAULT_URL)
     p.add_argument("--send-partitions", type=int, default=16, help="partitions for a new send-intents topic")
     p.add_argument("--cooldown-s", type=float, default=3600, help="same as decision.py")
-    p.add_argument("--poll-ms", type=float, default=5)
+    p.add_argument("--poll-ms", type=float, default=10, help="the send side is not on the timed path")
     p.add_argument("--batch", type=int, default=1000)
     asyncio.run(main(p.parse_args()))

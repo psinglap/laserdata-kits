@@ -126,7 +126,7 @@ async def main(a):
 
     groups = [mine[r::a.readers] for r in range(a.readers)]
     print(f"[{name}] owns partitions {mine} of {parts} (worker {a.worker} of {a.workers}), "
-          f"reading on {a.readers} connections", flush=True)
+          f"reading on {a.readers} connection(s)", flush=True)
     await asyncio.gather(report(), *(reader(g) for g in groups if g))
 
 
@@ -137,9 +137,9 @@ if __name__ == "__main__":
     p.add_argument("--workers", type=int, default=4, help="decision workers splitting the partitions")
     p.add_argument("--partitions", type=int, default=64, help="partitions for a new events topic")
     p.add_argument("--send-partitions", type=int, default=16, help="partitions for a new send-intents topic")
-    p.add_argument("--readers", type=int, default=2, help="connections reading this worker's partitions")
+    p.add_argument("--readers", type=int, default=1, help="connections reading this worker's partitions")
     p.add_argument("--cooldown-s", type=float, default=3600, help="at most one reminder per subscriber in this window")
     p.add_argument("--budget-ms", type=float, default=50, help="p99 budget, event written to decision made")
-    p.add_argument("--poll-ms", type=float, default=2, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--poll-ms", type=float, default=5, help="wait between rounds when nothing more is waiting")
     p.add_argument("--batch", type=int, default=1000)
     asyncio.run(main(p.parse_args()))
