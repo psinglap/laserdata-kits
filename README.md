@@ -18,3 +18,4 @@ Apache Iggy 0.9.0 broker on each push.
 | Zerodha | Exchange ticks to every Kite ticker node, with rebuild and replay from the log, beside NATS | [`zerodha/`](zerodha/) |
 | Juspay | Release guard: payment outcomes tagged with the serving release into the A/B comparison, and SCALE or ABORT back to the staggered rollout, beside Kafka and ClickHouse | [`juspay/`](juspay/) |
 | JioHotstar | Playback health signals: minimized heartbeats by cohort and CDN into the health check, and CDN health signals out to routing and alerting, beside Kafka | [`jiohotstar/`](jiohotstar/) |
+| ShareChat | Viewed posts into the feed dedup service before the next feed request, beside Redpanda and WarpStream | [`sharechat/`](sharechat/) |
