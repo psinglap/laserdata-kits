@@ -6,6 +6,7 @@ milliseconds, even through a match-day surge. It runs beside MSK, so nothing els
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/AQdS9hF3txezbZAJxzjjMS
 - **One slide:** [`LaserData_Razorpay_DowntimeSignals.pdf`](LaserData_Razorpay_DowntimeSignals.pdf)
 
 ## Why this use case
