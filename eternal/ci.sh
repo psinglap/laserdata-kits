@@ -18,7 +18,7 @@ wait || true
 echo "--- kitchens.log"; tail -n 8 kitchens.log
 echo "--- fpt.log";      tail -n 8 fpt.log
 echo "--- FAIL seconds, with where the time went (line: output)"; grep -n -A1 "FAIL (" fpt.log | cut -c1-150 || true
-echo "--- kitchens.log, slowest send per second above 100 ms"; grep -n -E "slowest send [0-9]{3,} ms" kitchens.log | sed -E 's/.*(slowest send.*)/\1/' | head -n 10 || true
+echo "--- kitchens.log, seconds with a send over 100 ms or a GC pause over 10 ms"; grep -n -E "slowest send [0-9]{3,} ms|GC pause [0-9]{2,} ms" kitchens.log | sed -E 's/^([0-9]+):.*(slowest send.*)/\1: \2/' | head -n 12 || true
 echo "--- broker log lines about saving or flushing"; docker compose logs --no-color --timestamps iggy 2>/dev/null | grep -i -E "sav|flush|fsync|segment|slow|warn" | tail -n 25 || true
 echo "--- kitchens.log / fpt.log wall clock start"; head -n 1 kitchens.log; date -u
 # Skip a 10 s warm-up while topics come online; a shared CI runner may blip, so require 95% of seconds to pass.

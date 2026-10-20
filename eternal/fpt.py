@@ -22,7 +22,7 @@ from datetime import timedelta
 
 from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
-from common import DEFAULT_URL, KITCHEN, ORDER_PARTITIONS, ORDERS, STREAM, Popularity, Window, load, msg, part
+from common import DEFAULT_URL, KITCHEN, ORDER_PARTITIONS, ORDERS, STREAM, GcPauses, Popularity, Window, load, msg, part
 
 
 def predict(view) -> float:
@@ -53,7 +53,7 @@ async def main(a):
                                 mode=DirectProducerConfig(batch_length=1000, linger_time=timedelta(microseconds=200)))
     pop = Popularity(a.restaurants, a.skew)
     view, lat, stats = {}, Window(), defaultdict(int)
-    to_broker, from_broker = Window(), Window()           # where the time goes (--why)
+    to_broker, from_broker, gc_pause = Window(), Window(), GcPauses()     # where the time goes (--why)
 
     async def on_kitchen(m):
         e = load(m.payload())
@@ -102,7 +102,8 @@ async def main(a):
             if a.why:
                 tb, fb = to_broker.flush(), from_broker.flush()
                 print(f"[why] kitchen->broker p50 {tb['p50']:.1f} p99 {tb['p99']:.1f} max {tb['max']:.1f}  "
-                      f"broker->feature view p50 {fb['p50']:.1f} p99 {fb['p99']:.1f} max {fb['max']:.1f} ms", flush=True)
+                      f"broker->feature view p50 {fb['p50']:.1f} p99 {fb['p99']:.1f} max {fb['max']:.1f} ms  "
+                      f"longest GC pause {gc_pause.take():.0f} ms", flush=True)
 
     await asyncio.gather(lane.consume_messages(on_kitchen, asyncio.Event()), checkout(), report())
 

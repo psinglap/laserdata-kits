@@ -41,8 +41,8 @@ peak of 8,400 orders a minute), 120,000 orders already cooking, kitchen time in 
 ```
 docker compose up -d                 # Apache Iggy 0.9.0 on :8090
 pip install -r requirements.txt      # apache-iggy 0.9.0
-python kitchens.py &                 # every kitchen: accept, cook, Food Order Ready, pickup
-python fpt.py                        # feature view + checkouts with an FPT prediction each
+python kitchens.py &                 # every kitchen, start to pickup
+python fpt.py                        # feature view + checkouts + FPT
 ```
 
 Add `--minute 1` to `kitchens.py` to run kitchen time 60 times faster, so orders cook in seconds.

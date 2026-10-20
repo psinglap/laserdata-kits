@@ -63,3 +63,22 @@ class Window:
         out = {"n": len(self.samples), "p50": pick(0.5), "p99": pick(0.99), "p999": pick(0.999), "max": s[-1]}
         self.samples = []
         return out
+
+
+class GcPauses:
+    """Longest Python garbage-collection pause since the last read, in ms (for --why)."""
+
+    def __init__(self):
+        import gc
+        self.longest, self._t = 0.0, 0.0
+        gc.callbacks.append(self._cb)
+
+    def _cb(self, phase, info):
+        if phase == "start":
+            self._t = time.perf_counter()
+        else:
+            self.longest = max(self.longest, (time.perf_counter() - self._t) * 1000)
+
+    def take(self) -> float:
+        v, self.longest = self.longest, 0.0
+        return v

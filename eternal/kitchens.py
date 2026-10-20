@@ -21,7 +21,7 @@ from datetime import timedelta
 
 from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
-from common import DEFAULT_URL, KITCHEN, KITCHEN_PARTITIONS, ORDER_PARTITIONS, ORDERS, STREAM, Popularity, load, msg, part
+from common import DEFAULT_URL, KITCHEN, KITCHEN_PARTITIONS, ORDER_PARTITIONS, ORDERS, STREAM, GcPauses, Popularity, load, msg, part
 
 
 class Kitchen:
@@ -59,6 +59,7 @@ async def main(a):
     pop = Popularity(a.restaurants, a.skew)
     kitchens = {name: Kitchen(name) for name in pop.names}
     timers, pending, stats = [], defaultdict(list), defaultdict(int)
+    gc_pause = GcPauses()
 
     def change(r, ev, order):
         # Publish the kitchen's resulting state, never only the delta.
@@ -152,7 +153,8 @@ async def main(a):
             cooking = sum(len(k.cooking) for k in kitchens.values())
             print(f"[kitchens] {stats['events']:>6,} kitchen events/s  predictions checked {n:>5,}/s  "
                   f"made on a stale kitchen view {pct:6.3f}%  (all: {stats['total_stale']:,} of {stats['total_checked']:,})  "
-                  f"orders accepted {stats['accepted']:,}  cooking {cooking:,}  slowest send {stats['slowest_send_ms']} ms", flush=True)
+                  f"orders accepted {stats['accepted']:,}  cooking {cooking:,}  slowest send {stats['slowest_send_ms']} ms  "
+                  f"longest GC pause {gc_pause.take():.0f} ms", flush=True)
             stats["events"] = stats["checked"] = stats["stale"] = stats["slowest_send_ms"] = 0
 
     await asyncio.gather(kitchen_clock(), orders.consume_messages(on_order, asyncio.Event()), report())
