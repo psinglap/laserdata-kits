@@ -6,6 +6,7 @@ milliseconds, even at peak. It runs beside WarpStream, so nothing else has to mo
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/JjZfCPgyyWeKUyW2r4AMfo
 - **One slide:** [`LaserData_Cursor_SpendLimits.pdf`](LaserData_Cursor_SpendLimits.pdf)
 
 ## Why this use case
