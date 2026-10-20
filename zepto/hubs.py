@@ -13,7 +13,7 @@ import time
 from collections import defaultdict
 from datetime import timedelta
 
-from apache_iggy import AutoCommit, DirectProducerConfig, Durability, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
 from common import DEFAULT_URL, INVENTORY, ORDERS, PRICING, STATUS, STREAM, key, load, msg
 
@@ -22,10 +22,10 @@ async def main(a):
     client = IggyClient.from_connection_string(a.url)
     await client.connect()
     cfg = DirectProducerConfig(batch_length=500, linger_time=timedelta(microseconds=500))
-    durable = dict(topic_partitions_count=a.partitions, mode=cfg, topic_durability=Durability.REPLICATED)
+    durable = dict(topic_partitions_count=a.partitions, mode=cfg)   # new topics default to replicated durability
     inv_p = await client.producer(STREAM, INVENTORY, **durable)
     price_p = await client.producer(STREAM, PRICING, **durable)
-    status_p = await client.producer(STREAM, STATUS, topic_partitions_count=8, mode=cfg, topic_durability=Durability.REPLICATED)
+    status_p = await client.producer(STREAM, STATUS, topic_partitions_count=8, mode=cfg)
     orders = await client.consumer_group("hubs", STREAM, ORDERS, polling_strategy=PollingStrategy.Next(), batch_length=1000,
                                          auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(microseconds=500))
     keys = [key(h, s) for h in range(a.hubs) for s in range(a.skus)]

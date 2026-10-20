@@ -27,6 +27,9 @@ from common import DEFAULT_URL, INVENTORY, ORDERS, PRICING, STREAM, Window, load
 async def main(a):
     client = IggyClient.from_connection_string(a.url)
     await client.connect()
+    while not all([await client.get_topic(STREAM, t) for t in (INVENTORY, PRICING)]):
+        print(f"[{a.name}] waiting for hubs.py to create the topics…", flush=True)
+        await asyncio.sleep(1)
     group = lambda topic: client.consumer_group(f"{a.name}-{topic}-{os.getpid()}", STREAM, topic,
                                                 polling_strategy=PollingStrategy.First(), batch_length=5000,
                                                 auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
