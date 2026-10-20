@@ -48,17 +48,18 @@ They print a line a second:
 
 ```
 [alert-rules]  5,000 events/s  event-to-rules p50 …ms  p99 …ms  p99.9 …ms  PASS (<50ms)  door changes …
-               alerts sent … (door outside geofence …, temperature …, cause named …)
+               alerts sent … (door outside geofence …, temperature …, cause named …)  stall gc …ms loop …ms
 [fleet]  5,000 events/s (steady)  door changes …  doors opened outside a geofence …
          door alerts at the driver app …, while the door was still open … (at 60 s it would be …)
-         temperature alerts …  event-to-notifiers n … p50 …ms p99 …ms
+         temperature alerts …  event-to-notifiers n … p50 …ms p99 …ms  stall gc …ms loop …ms
 ```
 
 "At 60 s it would be …" counts the same door alerts whose door stayed open longer than 60 seconds: what a lane
 that delivered the alert a minute after the door opened (one environmental-reading interval) would still have
-caught while the door was open. Set `--compare-s`.
+caught while the door was open. Set `--compare-s`. "Stall" is the longest garbage-collection pause and event-loop
+stall in that process that second, so a slow second can be traced rather than guessed at.
 
-@@MEANING@@
+**What the numbers mean.** The kit times each event from the moment `fleet.py` creates it to the moment `alert_rules.py` has evaluated it, and each alert from the gateway event that raised it to all three notifiers, through Python clients, on whatever machine you run it on. On a shared 2-vCPU CI runner with the broker and all scripts on one box, at reduced scale (120,000 assets, a door opening every 30 minutes per asset, about 2,200 events/s and 3 notifiers), it held event-to-rules p50 12.6 ms, p99 24.9 ms and p99.9 27.8 ms (59 of 59 steady-state seconds inside 50 ms), and event-to-notifiers (both hops) p50 15.5 ms and p99 29.2 ms. With 2 MB/s of dead-zone backfill on the same broker, the lane's p99 went from 24.7 ms to 25.4 ms. Of 187 door-outside-geofence alerts, all 187 reached the driver app while the door was still open; with the same illustrative door durations, an alert that took 60 s would have arrived after the door had shut for 79 of them (42%). That is the end-to-end loop through this demo code, not the broker alone. The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines. The rules in the kit are stand-ins that take no time; yours add their own.
 
 | File | What it is |
 |---|---|
