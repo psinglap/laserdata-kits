@@ -67,13 +67,15 @@ Each prints a line a second:
 its wait for the next write) to the moment `shaper.py` has applied it, through Python clients, on whatever
 machine you run it on. In CI, on a shared 2-vCPU GitHub runner with the broker, the exchange writers, two
 shaping nodes and the auction log all on one box, at 2,000 changes/s over 12,000 pairs (20 DSPs × 600
-segments), in CI run 1 each shaping node held a median per-second p50 of 3.6 ms, p99 6.5 ms and p99.9 7.3 ms;
-62 of 63 steady-state seconds passed the 20 ms budget, and the worst second reached 38.6 ms while the
-restarted node replayed the log on the same two CPUs. A 4× auction-log burst next door (to 4 MB/s) moved
-the median p99 from 6.46 to 6.50 ms. About 48 flips a second cost a median of 3.9 wasted callouts a second
-(15 per million callouts) at 20,000 requests/s per node; a 1 s refresh would have cost about 1,070. The
-restarted node rebuilt all 12,000 pairs from the last 20 s of the log (51,598 changes) in 0.46 s; 10 s of
-live changes alone would have covered 57% of them. No sequence gaps.
+segments), two green CI runs held a median per-second p50 of
+3.6 to 4.1 ms, p99 6.5 to 7.7 ms and p99.9 7.3 to 9.0 ms on each node; 62 of 63 steady-state
+seconds passed the 20 ms budget in each run, and the one slow second (21 to 39 ms) came as the restarted
+node replayed the log on the same two CPUs. A 4× auction-log burst next door (to 4 MB/s) moved the median
+p99 by less than 0.05 ms. About 48 flips a second cost a median of 3.9 to 4.5 wasted callouts a second
+(15 to 18 per million callouts) at 20,000 requests/s per node; had the same flips arrived a second later,
+about 1,030 to 1,070. The restarted node rebuilt all 12,000 pairs from the last 20 s of the log (about
+51,600 changes) in 0.46 to 0.64 s; 10 s of live changes alone would have covered 57% of them. No sequence
+gaps.
 That is the end-to-end lane through this demo code, not the broker alone; the broker's own tail latency is
 measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
 
