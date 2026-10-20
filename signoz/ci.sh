@@ -54,7 +54,7 @@ w = [l for l in open("writer2.log") if re.search(r"^\[writer\] +[1-9][0-9,]* row
 print("writer steady-state medians: rows/s %.0f  receive-to-queryable p50 %.1f ms  p99 %.1f ms  p99.9 %.1f ms  queue p99 %.1f ms" % tuple(
     st.median(num(q, w)) for q in (r"\] +([0-9,]+) rows/s", r"p50 +([0-9.]+)ms", r"p99 +([0-9.]+)ms", r"p99.9 +([0-9.]+)ms", r"queue p99 +([0-9.]+)ms")))
 c = [l for l in open("collectors.log") if re.search(r"batches/s", l) and not re.search(r" 0 batches/s", l)][3:]
-acc = num(r"accept p99 +([0-9.]+)ms", c)
+acc = num(r"accept p50 +[0-9.]+ms +p99 +([0-9.]+)ms", c)
 slow = sum(1 for v in acc if v >= 50)
 print("collectors: %d s with traffic, accept p50 median %.1f ms, accept p99 median %.1f ms, max %.1f ms, seconds >= 50 ms: %d" % (
     len(c), st.median(num(r"accept p50 +([0-9.]+)ms", c)), st.median(acc), max(acc), slow))

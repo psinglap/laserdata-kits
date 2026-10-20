@@ -5,7 +5,7 @@ import zlib
 
 STREAM = "signoz-ingest"
 LOGS = "otlp_logs"                     # the topic name the Kafka exporter in signoz-otel-collector defaults to
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: no 40 ms delayed-ACK stalls
 CH = dict(host="127.0.0.1", port=8123, username="lane", password="lane")
 TABLE = "signoz_lane.logs"
 
