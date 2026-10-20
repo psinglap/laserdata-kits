@@ -23,3 +23,4 @@ Apache Iggy 0.9.0 broker on each push.
 | MoEngage | Smart Trigger events, one topic per workspace: trigger events into the campaign evaluator at each brand's own rate, beside self-run Kafka | [`moengage/`](moengage/) |
 | SigNoz | OTLP ingest buffer between gateway collectors and ClickHouse writers: bursts and ClickHouse stalls absorbed in the log, offsets committed only after ClickHouse confirms | [`signoz/`](signoz/) |
 | Dream11 | Live fantasy points: every ball of every live match to every points node, with rebuild from the log, beside Kafka | [`dream11/`](dream11/) |
+| The Trade Desk | Spend-to-pacing loop: every win's spend into the pacing controllers, and their pause and throttle decisions back to every bid server, beside Kafka | [`the-trade-desk/`](the-trade-desk/) |
