@@ -52,7 +52,7 @@ if surge:
 flags = [l for l in open("routing.log") if re.search(r"\[routing\] degraded ", l)]
 for l in flags:
     print("  " + l.strip())
-win = num(r"degraded ([0-9.]+) s before", flags)
+win = [float(m.group(1)) for m in (re.search(r"degraded ([0-9.]+) s before", l) for l in flags) if m]  # "nan" when the onset was not seen
 lane = num(r"\(detection window\)  flag to routing ([0-9.]+) ms", flags)
 late = sum(num(r"plays sent after the flag ([0-9]+)$", flags))
 healthy = sum(1 for l in open("routing.log") if re.search(r"\[routing\] healthy ", l))
