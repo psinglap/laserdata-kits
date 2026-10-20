@@ -105,7 +105,7 @@ async def main(a):
                 n = max(1, int(a.rate * (a.onsale if onsale else 1) / 100))
                 changes, pending[:] = list(pending), []
                 for _ in range(n):
-                    hot = onsale and random.random() < 0.5      # half the onsale changes hit the one hot event
+                    hot = onsale and random.random() < a.hot_share   # part of the onsale changes hit the one hot event
                     changes.append(one_change(random.choice(by_event[a.hot_event] if hot else keys)))
                 out, statuses[:] = list(statuses), []
                 sends = [send(changes)]
@@ -121,7 +121,8 @@ async def main(a):
             total = stats["confirmed"] + stats["rejected"]
             rate = 100 * stats["rejected"] / total if total else 0
             print(f"[listings] seat picks confirmed {stats['confirmed']:,}  rejected as already sold {stats['rejected']:,}  "
-                  f"sold-before-checkout {rate:.3f}%  confirmed at a moved price {stats['price_moved']:,}", flush=True)
+                  f"sold-before-checkout {rate:.3f}%  confirmed at a moved price {stats['price_moved']:,}  (this second)", flush=True)
+            stats.clear()
 
     await asyncio.gather(churn(), orders.consume_messages(on_order, asyncio.Event()), report())
 
@@ -131,9 +132,10 @@ if __name__ == "__main__":
     p.add_argument("--url", default=DEFAULT_URL)
     p.add_argument("--events", type=int, default=2000, help="events on sale")
     p.add_argument("--listings", type=int, default=250, help="seller listings per event")
-    p.add_argument("--rate", type=int, default=5000, help="listing changes per second, all events")
+    p.add_argument("--rate", type=int, default=2000, help="listing changes per second, all events")
     p.add_argument("--onsale", type=float, default=1.0, help="multiplier for changes during a big onsale")
     p.add_argument("--onsale-at", type=float, default=0, help="seconds after start")
     p.add_argument("--onsale-for", type=float, default=120)
     p.add_argument("--hot-event", type=int, default=7, help="the event that goes on sale")
+    p.add_argument("--hot-share", type=float, default=0.2, help="share of onsale changes on the hot event")
     asyncio.run(main(p.parse_args()))

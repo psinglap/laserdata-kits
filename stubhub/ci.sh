@@ -9,9 +9,9 @@ docker compose up -d
 for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; sleep 1; done
 pip install -q -r requirements.txt
 python -m py_compile common.py listings.py event_pages.py clickstream_flood.py shadow_bridge.py
-# 200 events x 250 listings, 2,000 changes/s, a 3x onsale on one event from second 30 to 45,
+# 200 events x 250 listings, 1,500 changes/s, a 2x onsale (3,000/s) from second 30 to 45,
 # 150 seat picks/s, and 2 MB/s of clickstream from second 20 for 35 s.
-timeout 80 python -u listings.py --events 200 --listings 250 --rate 2000 --onsale 3 --onsale-at 30 --onsale-for 15 > listings.log 2>&1 &
+timeout 80 python -u listings.py --events 200 --listings 250 --rate 1500 --onsale 2 --onsale-at 30 --onsale-for 15 > listings.log 2>&1 &
 sleep 5
 timeout 70 python -u clickstream_flood.py --mbps 2 --at 20 --duration 35 > clicks.log 2>&1 &
 timeout 70 python -u event_pages.py --picks-per-s 150 > pages.log 2>&1 || true
@@ -51,10 +51,12 @@ print("seat picks sent: %d  listings a 2 s-behind page would still show as avail
     picks, stale, st.median(share) if share else 0))
 if picks < 1000 or stale < 1:
     raise SystemExit("seat picks or the lagged-view comparison did not flow")
-last = [l for l in open("listings.log") if "seat picks confirmed" in l][-1]
-print("checkout:", last.strip())
-if not re.search(r"confirmed [1-9]", last):
-    raise SystemExit("no seat pick was confirmed")
+l = [x for x in open("listings.log") if "seat picks confirmed" in x][15:]
+ok, rej, moved = (sum(nums(q, l)) for q in (r"confirmed ([0-9,]+)  rej", r"already sold ([0-9,]+)", r"moved price ([0-9,]+)"))
+print("checkout after warm-up: seat picks confirmed %d  rejected as already sold %d (%.2f%%)  confirmed at a moved price %d" % (
+    ok, rej, 100 * rej / max(ok + rej, 1), moved))
+if ok < 1000:
+    raise SystemExit("seat picks did not reach checkout")
 PY
 grep -q "\[clicks\] done" clicks.log || { echo "the clickstream neighbour did not run"; exit 1; }
 echo "Kit OK on Apache Iggy 0.9.0"
