@@ -21,23 +21,27 @@ async def main(a):
     client = IggyClient.from_connection_string(a.url)
     await client.connect()
     p = await client.producer(STREAM, STORM, topic_partitions_count=a.partitions,
-                              mode=DirectProducerConfig(batch_length=1000, linger_time=timedelta(milliseconds=2)))
+                              mode=DirectProducerConfig(batch_length=1000, linger_time=timedelta(microseconds=100)))
     body = os.urandom(a.size // 2).hex()          # stands in for an order event with its payload
-    t0, sent, mark = time.monotonic(), 0, time.monotonic()
+    t0 = due = mark = time.monotonic()
+    sent = 0
     async with p:
         while True:
             t = time.monotonic() - t0
             x = a.x if a.at <= t < a.at + a.for_s else 1
             per_tick = max(1, int(a.mbps * x * 1e6 / a.size / 100))
-            tick = time.monotonic()
             ms = [SendMessage(msg(order=f"O{random.randrange(10**9):09d}", ev="order.confirm", v=body)) for _ in range(per_tick)]
-            await p.send_with_partitioning(ms, Partitioning.balanced())
+            # spread the tick over partitions and send the chunks at once, so a storm is not paced by one round trip
+            chunks = [ms[i::a.partitions] for i in range(a.partitions)]
+            await asyncio.gather(*(p.send_with_partitioning(c, Partitioning.partition_id(pid))
+                                   for pid, c in enumerate(chunks) if c))
             sent += per_tick
             if time.monotonic() - mark >= 1:
                 state = f"storm {x:g}x" if x > 1 else "steady"
                 print(f"[storm] {state}  {sent:,} msgs/s  ~{sent * a.size / 1e6:.1f} MB/s on '{STORM}'", flush=True)
                 sent, mark = 0, time.monotonic()
-            await asyncio.sleep(max(0.0, 0.01 - (time.monotonic() - tick)))
+            due = max(due + 0.01, time.monotonic() - 0.1)        # never bank more than 100 ms of catch-up
+            await asyncio.sleep(max(0.0, due - time.monotonic()))   # behind schedule: send back to back
 
 
 if __name__ == "__main__":
