@@ -25,8 +25,7 @@ async def main(a):
     client = IggyClient.from_connection_string(a.url)
     await client.connect()
     await ensure_topics(client, CAMPAIGN)
-    parts = PARTITIONS[CAMPAIGN]
-    p = await client.producer(STREAM, CAMPAIGN, topic_partitions_count=parts,
+    p = await client.producer(STREAM, CAMPAIGN, topic_partitions_count=PARTITIONS[CAMPAIGN],
                               mode=DirectProducerConfig(batch_length=2000, linger_time=timedelta(milliseconds=1)))
     body = os.urandom(a.size // 2).hex()              # stands in for the merged template and user data
     tails = {ch: b'","ch":"%s","v":"%s"}' % (ch.encode(), body.encode()) for ch, _ in CHANNELS}
@@ -46,9 +45,9 @@ async def main(a):
                 # Same shape as msg(), built cheaply: one timestamp per tick, only the recipient and channel vary.
                 head = b'{"ns":%d,"tpl":"sale-day","r":"U' % time.time_ns()
                 ms = [SendMessage(head + b"%09d" % random.randrange(10**9) + tails[channel()]) for _ in range(n)]
-                chunks = [ms[i::parts] for i in range(parts)]        # spread over partitions, sent at once
-                await asyncio.gather(*(p.send_with_partitioning(c, Partitioning.partition_id(pid))
-                                       for pid, c in enumerate(chunks) if c))
+                # No per-key order to keep, so one large batch per tick, partitions in turn: a handful of
+                # requests a second instead of one per partition per tick.
+                await p.send_with_partitioning(ms, Partitioning.balanced())
                 sent += n
                 second += n
             if time.monotonic() - mark >= 1:
