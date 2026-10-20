@@ -46,12 +46,13 @@ async def main(a):
     rng = random.Random(me)
     start_ns = time.time_ns()
 
-    total = {}                              # (window, household, campaign) -> impressions, all ad servers
-    last_n = {}                             # (writer, household, campaign, window) -> that writer's latest total
+    # Per cap window, so a closed window is forgotten in one step, not by scanning every key.
+    total = defaultdict(dict)               # window -> {(household, campaign): impressions, all ad servers}
+    last_n = defaultdict(dict)              # window -> {(writer, household, campaign): that writer's latest total}
     last_seq = {}                           # (writer, household) -> last sequence applied
     my_seq = defaultdict(int)               # household -> this server's sequence
-    my_n = defaultdict(int)                 # (household, campaign, window) -> this server's count
-    served, over = defaultdict(int), defaultdict(int)   # window -> impressions; over-cap impressions
+    my_n = defaultdict(dict)                # window -> {(household, campaign): this server's count}
+    served, over, at_cap = defaultdict(int), defaultdict(int), defaultdict(int)  # per window
     lat, st, run = Window(), defaultdict(int), defaultdict(int)  # per-second / whole-run counters
     live, caught, held = set(), [None], deque()
     gc.freeze()                             # keep start-up tables out of the collector's way
@@ -65,17 +66,19 @@ async def main(a):
         if prev is not None and e["seq"] > prev + 1:
             run["gaps"] += 1                # an impression from this server never arrived
         last_seq[k] = e["seq"]
-        nk = (e["s"], e["h"], e["c"], e["w"])
-        d = e["n"] - last_n.get(nk, 0)
+        w, ln, tw = e["w"], last_n[e["w"]], total[e["w"]]
+        nk, tk = (e["s"], e["h"], e["c"]), (e["h"], e["c"])
+        d = e["n"] - ln.get(nk, 0)
         if d <= 0:
             return
-        last_n[nk] = e["n"]
-        tk = (e["w"], e["h"], e["c"])
-        before = total.get(tk, 0)
-        total[tk] = before + d
-        served[e["w"]] += d
+        ln[nk] = e["n"]
+        before = tw.get(tk, 0)
+        tw[tk] = before + d
+        served[w] += d
+        if before < a.cap <= before + d:
+            at_cap[w] += 1                  # this household has now seen the campaign --cap times
         if before + d > a.cap:
-            over[e["w"]] += before + d - max(before, a.cap)     # only impressions past the cap count
+            over[w] += before + d - max(before, a.cap)          # only impressions past the cap count
 
     def release(now):
         # --hold-ms: apply other servers' impressions only once they are this old (a slower pipeline)
@@ -115,7 +118,7 @@ async def main(a):
                     live.add(p)             # this partition has been read to the end of the log once
                     if len(live) == P:
                         caught[0] = time.monotonic()
-                        homes_seen = len({h for (_, h, _) in total})
+                        homes_seen = len({h for tw in total.values() for (h, _) in tw})
                         print(f"[{a.name}] rebuilt the cap view from the log in {(time.time_ns() - start_ns) / 1e9:.2f}s: "
                               f"{homes_seen:,} households, {run['replayed']:,} impressions since the previous window began",
                               flush=True)
@@ -134,21 +137,23 @@ async def main(a):
             x = a.peak if a.peak_at <= t < a.peak_at + a.peak_for else 1
             owed += a.rate * x * a.tick_ms / 1000
             w = cap_window(a.window_s)
+            tw, mine = total[w], my_n[w]
             batches = defaultdict(list)
             for _ in range(int(owed)):
                 i = rng.randrange(heavy_n) if rng.random() < a.heavy_traffic else rng.randrange(a.households)
                 h = homes[i]
                 for _ in range(a.tries):    # the ad decision: the first eligible campaign under its cap
                     c = camps[int(a.campaigns * rng.random() ** 2)]
-                    if total.get((w, h, c), 0) < a.cap:
+                    if tw.get((h, c), 0) < a.cap:
                         break
                     st["capped"] += 1
                 else:
                     st["unfilled"] += 1     # every campaign tried was at its cap: the slot goes elsewhere
                     continue
                 my_seq[h] += 1
-                my_n[(h, c, w)] += 1
-                e = {"s": me, "h": h, "c": c, "w": w, "seq": my_seq[h], "n": my_n[(h, c, w)], "ns": time.time_ns()}
+                n = mine[(h, c)] = mine.get((h, c), 0) + 1
+                e = {"s": me, "h": h, "c": c, "w": w, "seq": my_seq[h], "n": n,
+                     "ns": time.time_ns()}
                 apply(e)                    # this server knows its own impression at once
                 batches[hpart[i]].append(SendMessage(msg(**e)))
                 st["slots"] += 1
@@ -181,11 +186,10 @@ async def main(a):
             if w - 1 > closed and time.time() - w * a.window_s >= 1.0 + a.hold_ms / 1000:   # its tally is in by now
                 c = closed = w - 1
                 n, o = served[c], over[c]
-                at_cap = sum(1 for (ww, _, _), v in total.items() if ww == c and v >= a.cap)
-                print(f"[cap] window {c % 10000} closed: impressions {n:,}  household-campaign pairs at cap {at_cap:,}  "
+                print(f"[cap] window {c % 10000} closed: impressions {n:,}  household-campaign pairs at cap {at_cap[c]:,}  "
                       f"over-cap impressions {o:,} ({100 * o / n if n else 0:.3f}%)", flush=True)
                 for d in (total, last_n, my_n):     # forget windows that ended more than one window ago
-                    for k in [k for k in d if (k[0] if d is total else k[-1]) < c]:
+                    for k in [k for k in d if k < c]:
                         del d[k]
 
     await asyncio.gather(read(), serve(), report())
