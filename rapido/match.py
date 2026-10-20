@@ -61,7 +61,7 @@ async def main(a):
     to_pickup = {}                            # captain -> (ride, pickup lat, pickup lon)
     out_offers, out_track = [], []
     lat, req_lat, stats = Window(), Window(), defaultdict(int)
-    live = False                              # becomes True at the first live ping inside the budget
+    live = False                              # becomes True after a whole second of pings inside the budget
 
     def unindex(k):
         p = pos.get(k)
@@ -70,7 +70,6 @@ async def main(a):
             p[5] = None
 
     async def on_ping(m):
-        nonlocal live
         p = load(m.payload())
         k, cur = p["k"], pos.get(p["k"])
         if cur and p["seq"] <= cur[0]:
@@ -93,13 +92,14 @@ async def main(a):
                 stats["track"] += 1
                 if d < 0.05:
                     to_pickup.pop(k, None)    # arrived: pickup tracking ends
-        if p["ns"] >= started_ns:             # replayed history is a rebuild, not live latency
-            age = (time.time_ns() - p["ns"]) / 1e6
-            if live or age < a.budget_ms:
-                live = True
-                lat.add(age)
-            else:
+        age = (time.time_ns() - p["ns"]) / 1e6
+        if not live:                          # still replaying: track the oldest ping seen this second
+            stats["replayed"] += 1
+            stats["max_age"] = max(stats["max_age"], age)
+            if p["ns"] >= started_ns and age >= a.budget_ms:
                 stats["catching_up"] += 1
+        elif p["ns"] >= started_ns:           # replayed history is a rebuild, not live latency
+            lat.add(age)
 
     async def on_ride(m):
         r = load(m.payload())
@@ -151,10 +151,15 @@ async def main(a):
                 await asyncio.sleep(0.002)
 
     async def report():
+        nonlocal live
         while True:
             await asyncio.sleep(1)
             r, q = lat.flush(), req_lat.flush()
             if not live:
+                # live once a whole second of pings arrived inside the budget; partitions interleave,
+                # so one fresh ping alone doesn't mean the replay is finished
+                if stats["replayed"] and stats["max_age"] < a.budget_ms:
+                    live = True
                 print(f"[match] catching up: {stats['catching_up']:,} live pings older than {a.budget_ms} ms "
                       f"(replaying the backlog), index {len(pos):,} captains", flush=True)
             else:
