@@ -6,6 +6,7 @@ milliseconds, before that conversation's next turn. It runs beside WarpStream, s
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source
 engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/WKNPGw1NxVkcj4p9oPgrJ8
 - **One slide:** [`LaserData_CharacterAI_SafetyVerdicts.pdf`](LaserData_CharacterAI_SafetyVerdicts.pdf)
 
 ## Why this use case
