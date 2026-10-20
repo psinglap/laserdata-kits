@@ -15,3 +15,4 @@ Apache Iggy 0.9.0 broker on each push.
 | Groww | Position updates from OMS fills into the Holdings service, inside the app's post-trade refresh, beside Strimzi Kafka | [`groww/`](groww/) |
 | PhonePe | Payer velocity counts for the risk check on the payer's next payment, self-hosted beside Kafka | [`phonepe/`](phonepe/) |
 | Razorpay | Payment downtime signals: payment status into the downtime detector, and its signals out to Checkout and merchant webhooks, beside MSK | [`razorpay/`](razorpay/) |
+| Zerodha | Exchange ticks to every Kite ticker node, with rebuild and replay from the log, beside NATS | [`zerodha/`](zerodha/) |
