@@ -7,6 +7,7 @@ runs beside Cloud Pub/Sub, so PostGIS, the order services and everything else st
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/Q2NYx9h5ke9kV4WjadWAu1
 - **One slide:** [`LaserData_Porter_TripTracking.pdf`](LaserData_Porter_TripTracking.pdf)
 
 ## Why this use case
