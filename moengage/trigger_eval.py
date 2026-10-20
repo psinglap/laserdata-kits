@@ -147,7 +147,7 @@ async def main(a):
                   f"within 1 s {within:6.2f}%", flush=True)
             for i in sorted(clear):
                 b = await backlog(i)
-                if time.time_ns() - held_at.get(i, 0) < 2e9 or b:
+                if b > a.batch or (time.time_ns() - held_at.get(i, 0) < 2e9 and st["held_" + str(i)]):
                     print(f"[{name}] held at quota: {i} read {st['held_' + str(i)]:,}/s (quota "
                           f"{a.quota:,.0f}/s)  backlog {b:,} on its own topic  oldest waiting {held_wait[i]:5.1f} s",
                           flush=True)
