@@ -78,7 +78,8 @@ async def main(a):
         s = stores[r]
         s.seq += 1
         now = time.time_ns()
-        fb = {"r": r, "seq": s.seq, "ev": ev, "order": order, "enroute": s.enroute, "waiting": len(s.waiting),
+        fb = {"r": r, "seq": s.seq, "ev": ev, "order": order,
+              "enroute": s.enroute, "waiting": len(s.waiting),
               "waits": list(s.waits), "util": util(s.market), "ns": now}
         s.hist.append((now, s.seq, fb))
         pending[part(r, FEEDBACK_PARTITIONS)].append(SendMessage(msg(**fb)))

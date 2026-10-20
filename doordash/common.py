@@ -43,7 +43,9 @@ def policy(fb) -> tuple[str, float]:
     if fb is None:
         return "speed", 0.0
     wait_min = statistics.median(fb["waits"]) if fb["waits"] else 0.0
-    w = 0.35 * min(1.0, fb["waiting"] / 3) + 0.25 * min(1.0, wait_min / 8) + 0.4 * max(0.0, (fb["util"] - 70) / 30)
+    w = (0.35 * min(1.0, fb["waiting"] / 3)            # Dashers already at the counter
+         + 0.25 * min(1.0, wait_min / 8)                # how long recent Dashers waited
+         + 0.4 * max(0.0, (fb["util"] - 70) / 30))      # how busy the market's Dashers are
     w = round(min(1.0, w), 2)
     return ("batch" if w >= 0.5 else "speed"), w
 
