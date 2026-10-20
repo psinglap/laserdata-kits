@@ -167,7 +167,7 @@ async def main(a):
                     if kind == "reading":
                         if s.door == 0 and now >= s.fault and random.random() < a.fault_rate:
                             s.fault = now + random.uniform(300, 900)     # the reefer unit starts to fail
-                        heapq.heappush(due, (now + a.reading_s, i, "reading"))
+                        heapq.heappush(due, (t + a.reading_s, i, "reading"))   # from its due time, so a late tick never bunches readings
                         stats["readings"] += 1
                     elif kind == "open":
                         site = random.choice(sites(s.a))
