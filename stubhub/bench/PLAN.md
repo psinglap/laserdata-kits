@@ -25,7 +25,7 @@ Iggy is driven by `iggy-bench`, the candidate by the OpenMessaging Benchmark, wi
 kit runs alongside at each rate, so the report shows `sold-before-checkout` next to p99.
 
 **Pass line:** change-to-reader p99 under 20 ms at 200K changes/s with three readers, replicated, through the
-10× onsale and with the clickstream neighbour running; `sold-before-checkout` under 0.1% of seat picks.
+10× onsale and with the clickstream neighbour running; `sold-before-checkout` during the onsale within its pre-onsale range.
 
 **Published:** p99 and p99.9 vs rate (one line per system), the onsale trace, failover recovery, broker CPU,
 node count and monthly cost for the lane, and every config and raw output.

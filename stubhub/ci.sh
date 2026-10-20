@@ -39,12 +39,13 @@ p = [l for l in open("pages.log") if re.search(r"\[pages\] +[1-9][0-9,]* changes
 print("steady-state medians: changes/s %.0f  change-to-page p50 %.1f ms  p99 %.1f ms  p99.9 %.1f ms" % tuple(
     st.median(nums(q, p)) for q in (r"\] +([0-9,]+) changes/s", r"p50 +([0-9.]+)ms", r"p99 +([0-9.]+)ms", r"p99.9 +([0-9.]+)ms")))
 all_p = [l for l in open("pages.log") if re.search(r"\[pages\] +[1-9][0-9,]* changes/s", l)]
-p99 = nums(r"p99 +([0-9.]+)ms", all_p)
-rate = nums(r"\] +([0-9,]+) changes/s", all_p)
-if len(p99) > 45:
-    # approximate windows (pages starts 5 s after listings): quiet, clickstream only, onsale + clickstream
-    print("p99 median per second: quiet %.1f ms (%.0f changes/s), with 2 MB/s clickstream %.1f ms, onsale + clickstream %.1f ms (%.0f changes/s)" % (
-        st.median(p99[10:18]), st.median(rate[10:18]), st.median(p99[19:24]), st.median(p99[26:37]), st.median(rate[26:37])))
+p99, rate = nums(r"p99 +([0-9.]+)ms", all_p), nums(r"\] +([0-9,]+) changes/s", all_p)
+base = st.median(rate)
+on = [i for i, r in enumerate(rate) if r > 1.4 * base]          # the onsale seconds, found from the rate itself
+off = [i for i in range(10, len(rate)) if i not in on]
+if on and off:
+    print("p99 median per second: onsale %.1f ms over %d s (median %.0f changes/s, worst second %.1f ms), other steady seconds %.1f ms" % (
+        st.median(p99[i] for i in on), len(on), st.median(rate[i] for i in on), max(p99[i] for i in on), st.median(p99[i] for i in off)))
 picks, stale = sum(nums(r"seat picks ([0-9,]+)", p)), sum(nums(r"would list ([0-9,]+) already-sold", p))
 share = nums(r"already-sold listings \(([0-9.]+)%\)", p)
 print("seat picks sent: %d  listings a 2 s-behind page would still show as available, already sold: %d (median %.2f%% of listings shown)" % (
