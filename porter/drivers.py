@@ -137,7 +137,7 @@ async def main(a):
         else:
             ms, tgt = "reached_drop", d.drop
         key = (d.order, ms)
-        if key not in done and km(d.lat, d.lon, *tgt) <= FENCE_KM:
+        if key not in done and km(round(d.lat, 6), round(d.lon, 6), *tgt) <= FENCE_KM:   # the position as the ping carries it
             done.add(key)                                      # a fence is reached once per order
             truth[key] = (d.seq, now_ns, now)
 
