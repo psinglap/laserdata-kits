@@ -3,7 +3,7 @@
 # two ticker nodes, an order-postback burst next door, and one node restarted mid-session.
 # The 10x tick burst is left to your own machines: on a shared 2-vCPU runner the Python feed and
 # readers, not the broker, run out of CPU first.
-# Pass only if the nodes hold the p99 budget in 95% of steady-state seconds with no sequence gaps,
+# Pass only if each node holds the p99 budget in 95% of its steady-state seconds with no sequence gaps,
 # and the restarted node rebuilds a quote for every instrument from the log.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -30,15 +30,20 @@ for f in ticker-1 ticker-2 ticker-2-restart; do
 done
 echo "--- FAIL seconds (file:line: output)"; grep -n "FAIL (" ticker-*.log | cut -c1-150 || true
 status=0
-for f in ticker-1 ticker-2-restart; do
-  # Skip a 10 s warm-up; a shared CI runner may blip, so require 95% of seconds to pass.
-  steady=$(grep -E '\[ticker-[12]\] +[1-9][0-9,]* ticks/s' $f.log | tail -n +11 || true)
-  live=$(grep -c 'PASS (' <<<"$steady" || true)
-  fail=$(grep -c 'FAIL (' <<<"$steady" || true)
-  gaps=$(grep -Eo 'gaps [0-9]+' $f.log | tail -n 1 | cut -d' ' -f2)
-  need=20; [ "$f" = ticker-1 ] && need=30
-  echo "$f steady-state seconds with live ticks: PASS $live, FAIL $fail; sequence gaps ${gaps:-none}"
-  if [ "$live" -lt "$need" ] || [ $(( fail * 100 )) -gt $(( (live + fail) * 5 )) ] || [ "${gaps:-1}" != "0" ]; then status=1; fi
+# Skip each run's first 10 s (warm-up, or the replay right after the restart); a shared CI runner may blip,
+# so require 95% of each node's remaining seconds to pass, and no sequence gap anywhere.
+steady() { for f in "$@"; do grep -E '\[ticker-[12]\] +[1-9][0-9,]* ticks/s' $f | tail -n +11 || true; done; }
+for node in ticker-1 ticker-2; do
+  if [ $node = ticker-1 ]; then s=$(steady ticker-1.log); else s=$(steady ticker-2.log ticker-2-restart.log); fi
+  live=$(grep -c 'PASS (' <<<"$s" || true)
+  fail=$(grep -c 'FAIL (' <<<"$s" || true)
+  echo "$node steady-state seconds with live ticks: PASS $live, FAIL $fail"
+  if [ "$live" -lt 40 ] || [ $(( fail * 100 )) -gt $(( (live + fail) * 5 )) ]; then status=1; fi
+done
+for f in ticker-1.log ticker-2.log ticker-2-restart.log; do
+  gaps=$(grep -Eo 'gaps [0-9]+' $f | tail -n 1 | cut -d' ' -f2)
+  echo "$f sequence gaps: ${gaps:-none}"
+  [ "${gaps:-1}" = "0" ] || status=1
 done
 [ "$status" -eq 0 ] || { echo "tick lane check failed"; exit 1; }
 grep -Eq 'rebuilt from the last 20 s of the log in [0-9.]+s: quotes for ([0-9,]+) of \1 instruments' ticker-2-restart.log \
