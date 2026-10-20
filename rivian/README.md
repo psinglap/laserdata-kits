@@ -57,13 +57,14 @@ wrong lock or charging state? That is the business cost of a slow lane.
 **What the numbers mean.** The kit times each report from the moment `vehicles.py` creates it to the
 moment `vehicle_state.py` has applied it, through Python clients, on whatever machine you run it on. On a
 shared 2-vCPU CI runner with the broker and all scripts on one box, at 3,000 reports/s (15,000 vehicles) and
-300 app opens a second, a green run held p50 11.2 ms, p99 21.8 ms and p99.9 23.8 ms (median of 62
-steady-state seconds), with no failing second. 3 MB/s of full signal reports on the topic next door moved the
-lane's p99 from 21.6 to 21.8 ms. Of 18,308 app opens checked against the truth (11,171 of them right after a
-lock or charging change), every one showed the vehicle's latest report, and none showed the wrong lock or
-charging state. That is the end-to-end lane through this demo code, not the broker alone, and it does not
-include the cellular network. The broker's own tail latency is measured with `iggy-bench` in
-`bench/PLAN.md`, on dedicated machines.
+300 app opens a second, three green runs held p50 11 to 14 ms, p99 22 to 26 ms and p99.9 24 to 30 ms (median
+of 61 to 62 steady-state seconds each), with no failing second. 3 MB/s of full signal reports on the topic
+next door moved the lane's p99 by 1% to 4%. Of about 18,000 app opens per run checked against the truth
+(about 60% of them right after a lock or charging change), a median of 99.7% to 100% per second showed
+the vehicle's latest report; the rest, about 0.3%, were one report behind because the newer report was still
+in flight, none were two behind, and 0 to 3 per run showed the wrong lock or charging state. That is the
+end-to-end lane through this demo code, not the broker alone, and it does not include the cellular network.
+The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
 
 | File | What it is |
 |---|---|
