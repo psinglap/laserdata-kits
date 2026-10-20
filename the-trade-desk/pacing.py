@@ -82,8 +82,8 @@ async def main(a):
         last[(f, s["b"], g)] = s["spend"]
         stats["events"] += 1
         b = budgets[g]
-        if total[(f, g)] > b:
-            over[f] += total[(f, g)] - max(before, b)    # only the part past the budget counts
+        if before >= b:
+            over[f] += total[(f, g)] - before   # won after the ad group had already reached its budget
         if f != flight(a.flight_s, now / 1e9):
             return                          # an earlier flight: count it, but decide nothing
         if total[(f, g)] >= b:

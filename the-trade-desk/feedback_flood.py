@@ -2,7 +2,7 @@
 
 Use it to check that a high-volume, latency-tolerant stream on the same broker does not move the spend
 lane's p99 (watch pacing.py while this runs). One batch per 10 ms tick, spread over partitions by the
-broker, so the neighbour itself does not flood the broker with tiny requests.
+broker, sized to what the tick owes, so the neighbour itself does not flood the broker with tiny requests.
 """
 import argparse
 import asyncio
@@ -24,18 +24,24 @@ async def main(a):
     p = await client.producer(STREAM, FEEDBACK, topic_partitions_count=PARTITIONS[FEEDBACK],
                               mode=DirectProducerConfig(batch_length=5000, linger_time=timedelta(milliseconds=5)))
     blob = os.urandom(a.size // 2).hex()       # stands in for the bid request and response detail
-    per_tick = max(1, int(a.mbps * 1e6 / a.size / 100))
+    per_s = a.mbps * 1e6 / a.size
     if a.at:
         print(f"[feedback] starting in {a.at:g} s", flush=True)
         await asyncio.sleep(a.at)
     gc.freeze()
     due, sent, t0, end = time.monotonic(), 0, time.monotonic(), time.monotonic() + (a.duration or 1e12)
+    owed, last = 0.0, time.monotonic()
     async with p:
         while time.monotonic() < end:
-            ms = [SendMessage(msg(ag=random.randrange(100_000), outcome=random.choice(("loss", "win", "no-bid")), v=blob))
-                  for _ in range(per_tick)]
-            await p.send_with_partitioning(ms, Partitioning.balanced())
-            sent += per_tick
+            now = time.monotonic()
+            owed += per_s * (now - last)    # what this tick owes, so a slow send is made up in the next batch
+            last, n = now, int(owed)
+            owed -= n
+            if n:
+                ms = [SendMessage(msg(ag=random.randrange(100_000), outcome=random.choice(("loss", "win", "no-bid")), v=blob))
+                      for _ in range(n)]
+                await p.send_with_partitioning(ms, Partitioning.balanced())
+                sent += n
             if time.monotonic() - t0 >= 1:
                 print(f"[feedback] {sent:,} msgs/s  ~{sent * a.size / 1e6:.1f} MB/s on '{FEEDBACK}'", flush=True)
                 sent, t0 = 0, time.monotonic()
