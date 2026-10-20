@@ -58,8 +58,9 @@ async def main(a):
         if p["ns"] >= started_ns:           # replayed history is a rebuild, not live latency
             now = time.time_ns()
             lat.add((now - p["ns"]) / 1e6)
-            to_broker.add(m.timestamp() / 1e3 - p["ns"] / 1e6)
-            from_broker.add(now / 1e6 - m.timestamp() / 1e3)
+            if a.why:
+                to_broker.add(m.timestamp() / 1e3 - p["ns"] / 1e6)
+                from_broker.add(now / 1e6 - m.timestamp() / 1e3)
 
     async def on_leg(m):
         e = load(m.payload())
@@ -91,12 +92,14 @@ async def main(a):
         # Every active order gets a fresh ETA every --refresh seconds, spread over ten slices.
         async with out:
             while True:
+                keys = list(trip)
                 for s in range(10):
                     t_slice = time.monotonic()
                     batches = defaultdict(list)
-                    for k, t in list(trip.items()):
-                        if hash(k) % 10 != s:
-                            continue
+                    for k in keys[s::10]:
+                        t = trip.get(k)
+                        if t is None:
+                            continue                # delivered since the snapshot
                         e, seq = eta_s(k, t)
                         if e is None:
                             continue

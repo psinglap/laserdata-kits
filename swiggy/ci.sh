@@ -12,7 +12,7 @@ timeout 80 python -u fleet.py --partners 10000 --every 5 --assign-p 0.3 --wait-s
 sleep 5
 # A 20x retry storm next door from second 30 to 50 of the tracker's run, on the same broker.
 timeout 65 python -u retry_storm.py --mbps 0.05 --x 20 --at 30 --for 20 > storm.log 2>&1 &
-timeout 70 python -u track.py --refresh 5 --why > track.log 2>&1 || true
+timeout 70 python -u track.py --why > track.log 2>&1 || true
 wait || true
 echo "--- fleet.log"; grep -v "ETAs checked 0 " fleet.log | tail -n 8
 echo "--- track.log"; tail -n 12 track.log
