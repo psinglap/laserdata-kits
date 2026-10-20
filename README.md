@@ -22,3 +22,4 @@ Apache Iggy 0.9.0 broker on each push.
 | ZEE5 | Continue Watching heartbeats: playback position into the resume point a viewer gets on their next device, beside Confluent Cloud and ScyllaDB | [`zee5/`](zee5/) |
 | MoEngage | Smart Trigger events, one topic per workspace: trigger events into the campaign evaluator at each brand's own rate, beside self-run Kafka | [`moengage/`](moengage/) |
 | SigNoz | OTLP ingest buffer between gateway collectors and ClickHouse writers: bursts and ClickHouse stalls absorbed in the log, offsets committed only after ClickHouse confirms | [`signoz/`](signoz/) |
+| Dream11 | Live fantasy points: every ball of every live match to every points node, with rebuild from the log, beside Kafka | [`dream11/`](dream11/) |
