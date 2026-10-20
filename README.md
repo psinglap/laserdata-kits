@@ -11,3 +11,4 @@ Apache Iggy 0.9.0 broker on each push.
 | Meesho | Order-update notifications into Meecom, kept ahead of sale-day campaigns, beside Confluent | [`meesho/`](meesho/) |
 | Zomato (Eternal) | Restaurant kitchen state for food preparation time predictions, beside Confluent Cloud | [`eternal/`](eternal/) |
 | Rapido | On-duty captain location for ride matching and pickup tracking, beside Kafka | [`rapido/`](rapido/) |
+| Porter | Driver-partner location pings for the live tracking link and pickup and drop arrivals, beside Cloud Pub/Sub | [`porter/`](porter/) |
