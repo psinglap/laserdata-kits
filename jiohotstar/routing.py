@@ -57,10 +57,9 @@ async def main(a):
         view[k] = (s["seq"], s["status"])
         now = time.time_ns()
         age = (now - s["ns"]) / 1e6
-        if not caught_up[0] and age < a.budget_ms:
-            caught_up[0] = True             # replay is done; from here on, time live signals
-        if not caught_up[0]:
+        if not caught_up[0]:                # still replaying: track the oldest signal seen this second
             stats["replayed"] += 1
+            stats["max_age"] = max(stats["max_age"], age)
             return
         lat.add(age)
         if s["status"] == "degraded" and before[1] != "degraded":
@@ -100,6 +99,10 @@ async def main(a):
         while True:
             await asyncio.sleep(1)
             if not caught_up[0]:
+                # caught up once a whole second of signals arrived inside the budget; partitions interleave,
+                # so one fresh signal alone doesn't mean the replay is finished
+                if stats["replayed"] and stats["max_age"] < a.budget_ms:
+                    caught_up[0] = True
                 print(f"[{a.name}] catching up: replayed {stats['replayed']:,} earlier signals this second" if stats["replayed"]
                       else f"[{a.name}] waiting for the first health signals", flush=True)
                 stats.clear()
