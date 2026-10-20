@@ -6,6 +6,7 @@ every call worker, in milliseconds, before the next turn. It runs beside MSK, so
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source
 engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/9CTsZe7yBKf5jieZ9KR2pF
 - **One slide:** [`LaserData_Vapi_ProviderHealth.pdf`](LaserData_Vapi_ProviderHealth.pdf)
 
 ## Why this use case
