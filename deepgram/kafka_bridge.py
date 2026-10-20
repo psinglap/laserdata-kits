@@ -13,6 +13,8 @@ Map your message in to_usage(): the kit needs the request (stream) ID, project, 
 audio in this message in seconds, and whether the stream has closed. The defaults read JSON with fields
 request_id, project_id, accessor, model, duration and is_final; use --cumulative if your messages already carry
 the stream's total instead of a chunk.
+With chunks, a message your pipeline itself delivers twice reaches Iggy twice with new sequences; with
+--cumulative (a running total per request) such a repeat adds nothing, so prefer it when your messages allow.
 In a shadow run only the lane is timed; the clock starts when the bridge reads the message.
 Needs: pip install confluent-kafka apache-iggy==0.9.0
 Pass client settings with -X, for example:
