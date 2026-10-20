@@ -52,10 +52,9 @@ async def main(a):
     buf = []
     lat, stats = Window(), defaultdict(int)
     to_broker, from_broker = Window(), Window()     # where the time goes (--why)
-    live = False                               # becomes True at the first live ping inside the budget
+    live = False                               # becomes True after a whole second of pings inside the budget
 
     async def on_ping(m):
-        nonlocal live
         p = load(m.payload())
         k, cur = p["k"], last.get(p["k"])
         if cur and p["seq"] <= cur[0]:
@@ -70,17 +69,18 @@ async def main(a):
                 if p["ns"] >= started_ns - a.resend_s * 1e9:     # a rebuild does not re-send old arrivals
                     buf.append((k, SendMessage(msg(k=k, order=p["order"], ms=ms, ping_seq=p["seq"], ping_ns=p["ns"]))))
                     stats[ms] += 1
-        if p["ns"] >= started_ns:              # replayed history is a rebuild, not live latency
-            now = time.time_ns()
-            age = (now - p["ns"]) / 1e6
-            if live or age < a.budget_ms:
-                live = True
-                lat.add(age)
-                if a.why:
-                    to_broker.add(m.timestamp() / 1e3 - p["ns"] / 1e6)
-                    from_broker.add(now / 1e6 - m.timestamp() / 1e3)
-            else:
+        now = time.time_ns()
+        age = (now - p["ns"]) / 1e6
+        if not live:                           # still replaying: track the oldest ping seen this second
+            stats["replayed"] += 1
+            stats["max_age"] = max(stats["max_age"], age)
+            if p["ns"] >= started_ns and age >= a.budget_ms:
                 stats["catching_up"] += 1
+        elif p["ns"] >= started_ns:            # replayed history is a rebuild, not live latency
+            lat.add(age)
+            if a.why:
+                to_broker.add(m.timestamp() / 1e3 - p["ns"] / 1e6)
+                from_broker.add(now / 1e6 - m.timestamp() / 1e3)
 
     async def on_trip(m):
         e = load(m.payload())
@@ -112,10 +112,15 @@ async def main(a):
         return ages[int(0.99 * (len(ages) - 1))] if ages else 0.0
 
     async def report():
+        nonlocal live
         while True:
             await asyncio.sleep(1)
             r = lat.flush()
             if not live:
+                # live once a whole second of pings arrived inside the budget; partitions interleave,
+                # so one fresh ping alone doesn't mean the replay is finished
+                if stats["replayed"] and stats["max_age"] < a.budget_ms:
+                    live = True
                 print(f"[trips] catching up: {stats['catching_up']:,} live pings older than {a.budget_ms} ms "
                       f"(replaying the backlog), drivers {len(last):,}, open orders {len(orders):,}", flush=True)
             else:
