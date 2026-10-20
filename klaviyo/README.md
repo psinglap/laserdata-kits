@@ -69,12 +69,14 @@ fire-and-forget API caller waits for when a publish fails.
 to the moment a retrier has it, through Python clients, on whatever machine you run it on; that includes
 the retrier's 5 ms idle poll. On a shared 2-vCPU GitHub runner, with the broker and four Python processes
 on one box, 1% of 6,000 events a second failing and then 50% for 30 s (3,000 failed writes a second), and
-4 MB/s of S3 replay next door, two CI runs held capture-to-retry p50 4.5 to 5.5 ms, p99 8.5 to 9.9 ms and
-p99.9 8.5 to 9.9 ms (medians per second) over 64 to 65 steady-state seconds per retrier; in the surge
-seconds the median p99 was 10.7 to 12.1 ms (7.1 to 7.4 ms otherwise). One second in 257 went over the
-100 ms budget (106.8 ms). The capture write's ack p99 had a median of 2.0 to 3.2 ms per second (worst
-second 32 to 107 ms). Each run captured 92,759 failed writes and lost none: 92,565 and 92,576 were
-re-published, 194 and 183 went to the DLQ (exactly the events with payloads MSK rejects), and every P10
+4 MB/s of S3 replay next door, three CI runs held capture-to-retry p50 3.7 to 5.2 ms, p99 7.1 to 8.2 ms and
+p99.9 7.1 to 8.2 ms (medians per second) over 64 to 65 steady-state seconds per retrier; in the surge
+seconds the median p99 was 7.7 to 11.0 ms (6.0 to 7.5 ms otherwise). Ten seconds in 387 went over the
+100 ms budget (worst 350 ms); they hit both retriers in the same seconds, and the worst ones show in the
+publisher's capture ack too, so the shared runner or broker paused, not one reader. The capture write's ack p99
+had a median of 1.5 to 2.2 ms per second (worst second 7.8 to 344 ms). The runs captured 92,759, 92,099
+and 92,699 failed writes and lost none: 92,578, 91,945 and 92,538 were re-published, 181, 154 and 161
+went to the DLQ (exactly the events with payloads MSK rejects), and every P10
 event was re-published inside 5 seconds of its first failure. That is the end-to-end lane through this
 demo code at a reduced scale, not the broker alone. The broker's own tail latency, the surge at full size
 and the cost to keep the lane ready are measured with `iggy-bench` on dedicated machines (`bench/PLAN.md`).
