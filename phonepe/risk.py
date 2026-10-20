@@ -51,12 +51,11 @@ async def main(a):
         now = time.time_ns()
         store[p] = (v["seq"], now, v["cnt_60s"], v["payees_10m"])
         age = (now - v["ns"]) / 1e6
-        if not caught_up[0] and age < a.budget_ms:
-            caught_up[0] = True             # replay of earlier payments is done; from here on, time live ones
         if caught_up[0]:
             lat.add(age)
-        else:
+        else:                               # still replaying: track the oldest payment seen this second
             stats["replayed"] += 1
+            stats["max_age"] = max(stats["max_age"], age)
 
     async def on_check(m):
         c = load(m.payload())
@@ -77,8 +76,12 @@ async def main(a):
         while True:
             await asyncio.sleep(1)
             if not caught_up[0]:
+                # caught up once a whole second of payments arrived inside the budget; partitions interleave,
+                # so one fresh payment alone doesn't mean the replay is finished
+                if stats["replayed"] and stats["max_age"] < a.budget_ms:
+                    caught_up[0] = True
                 print(f"[{a.name}] catching up: replayed {stats['replayed']:,} earlier payments this second", flush=True)
-                stats["replayed"] = 0
+                stats["replayed"] = stats["max_age"] = 0
                 lat.flush()
                 continue
             r = lat.flush()
