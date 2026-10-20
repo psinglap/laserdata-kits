@@ -7,6 +7,7 @@ beside Confluent Cloud and ScyllaDB, so nothing else has to move.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/Rrvarsp769dg8Fq95geKVi
 - **One slide:** [`LaserData_ZEE5_ContinueWatching.pdf`](LaserData_ZEE5_ContinueWatching.pdf)
 
 ## Why this use case
