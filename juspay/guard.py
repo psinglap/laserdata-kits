@@ -52,10 +52,9 @@ async def main(a):
         o = load(m.payload())
         now = time.time_ns()
         age = (now - o["ns"]) / 1e6
-        if not caught_up[0] and age < a.budget_ms:
-            caught_up[0] = True             # replay of earlier outcomes is done; from here on, time live ones
-        if not caught_up[0]:
+        if not caught_up[0]:                # still replaying: track the oldest outcome seen this second
             stats["replayed"] += 1
+            stats["max_age"] = max(stats["max_age"], age)
             return
         lat.add(age)
         if age > 5000:
@@ -135,8 +134,12 @@ async def main(a):
         while True:
             await asyncio.sleep(1)
             if not caught_up[0]:
+                # caught up once a whole second of outcomes arrived inside the budget; partitions interleave,
+                # so one fresh outcome alone doesn't mean the replay is finished
+                if stats["replayed"] and stats["max_age"] < a.budget_ms:
+                    caught_up[0] = True
                 print(f"[{a.name}] catching up: replayed {stats['replayed']:,} earlier outcomes this second", flush=True)
-                stats["replayed"] = 0
+                stats["replayed"] = stats["max_age"] = 0
                 lat.flush()
                 continue
             r = lat.flush()
