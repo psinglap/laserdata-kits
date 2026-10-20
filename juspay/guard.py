@@ -106,7 +106,7 @@ async def main(a):
             z = z_score(ok_c, n_c, ok_s, n_s)
             g["last"] = (p_c, n_c, p_s, n_s, z)
             sc = g["stage"]
-            action, extra = None, ""
+            action, extra, span = None, "", f"{a.window:g} s"
             if n_c >= a.min_n and z <= -a.z_abort and p_s - p_c >= a.min_drop:
                 action, g["share"], g["done"] = "ABORT", 0, True
                 growth = {c: codes_c[c] / n_c - codes_s.get(c, 0) / n_s for c in codes_c}
@@ -116,6 +116,9 @@ async def main(a):
                     extra += f"; decided {(now - g['first_bad']) / 1e9:.2f} s after the defect's first failed payment"
             elif (sc[1] >= a.stage_n and time.monotonic() - g["stage_at"] >= a.stage_min_s
                   and z_score(sc[0], sc[1], sc[2], sc[3]) > -2):
+                # The SCALE test looks at the whole stage, so report the stage's numbers with it.
+                p_c, n_c, p_s, n_s = sc[0] / sc[1], sc[1], sc[2] / max(sc[3], 1), sc[3]
+                z, span = z_score(*sc), f"the {g['share']}% stage"
                 nxt = [s for s in LADDER if s > g["share"]]
                 g["share"] = nxt[0] if nxt else 100
                 action = "PROMOTE" if g["share"] >= 100 else "SCALE"
@@ -126,7 +129,7 @@ async def main(a):
                 await verdicts.send([SendMessage(msg(run=g["run"], seq=g["seq"], rel=g["canary"], action=action,
                                                      share=g["share"], p_c=p_c, p_s=p_s, z=z))])
                 print(f"[verdict] {action} {g['canary']} -> {g['share']}%  success canary {100 * p_c:.1f}% (n {n_c:,}) "
-                      f"vs stable {100 * p_s:.1f}% (n {n_s:,}) over {a.window:g} s  z {z:+.1f}{extra}", flush=True)
+                      f"vs stable {100 * p_s:.1f}% (n {n_s:,}) over {span}  z {z:+.1f}{extra}", flush=True)
 
     async def report():
         while True:
@@ -137,7 +140,7 @@ async def main(a):
                 lat.flush()
                 continue
             r = lat.flush()
-            ok = "PASS" if r["p99"] < a.budget_ms else "FAIL"
+            ok = "idle" if not r["n"] else "PASS" if r["p99"] < a.budget_ms else "FAIL"
             print(f"[{a.name}] {r['n']:>7,} outcomes/s  outcome-to-guard p50 {r['p50']:6.1f}ms  p99 {r['p99']:6.1f}ms  "
                   f"p99.9 {r['p999']:6.1f}ms  {ok} (<{a.budget_ms}ms)  payments tracked {len(seen):,}", flush=True)
             if g.get("last"):

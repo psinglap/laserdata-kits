@@ -153,7 +153,7 @@ if __name__ == "__main__":
     p.add_argument("--stable", default="2026.10.14.0", help="the stable release (illustrative name)")
     p.add_argument("--canary", default="2026.10.20.0", help="the new release being staggered (illustrative name)")
     p.add_argument("--start-share", type=float, default=LADDER[0], help="the canary's first share of traffic, percent")
-    p.add_argument("--bad-at", type=float, default=150, help="seconds after start when the canary's defect begins")
+    p.add_argument("--bad-at", type=float, default=200, help="seconds after start when the canary's defect begins")
     p.add_argument("--bad-fail", type=float, default=0.8, help="share of the canary's card payments the defect fails")
     p.add_argument("--retry-share", type=float, default=0.1, help="share of failed payments tried again")
     p.add_argument("--peak", type=float, default=1, help="rate multiplier during the peak")
