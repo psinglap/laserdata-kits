@@ -1,11 +1,15 @@
 """The failed-writes processor: reads captured events back and re-publishes them to MSK.
 
 One shard of the retrier fleet: it owns the failed-writes partitions whose id % --shards ==
---shard and reads each of them directly (no consumer group, so no rebalances; offsets are kept
-on the broker per partition, so a restarted retrier resumes where it stopped). For every event
+--shard and reads each of them directly (no consumer group, so no rebalances). It tracks its own
+read position and stores each partition's offset on the broker at most once a second, not on every
+poll, so a restarted retrier resumes from at most a second before where it stopped (those events are
+re-published again: at-least-once, deduped downstream by event id). For every event
 it calls republish(), which here stands in for the produce to the main MSK topic of the event's
 priority lane. A publish that fails again goes back on failed-writes with attempt + 1 after a
 short backoff; after --max-attempts it goes to failed-writes-dlq (kept 7 days) for investigation.
+Write-backs and DLQ writes go out from their own task on their own connection every 10 ms, so a
+reader never waits on a send.
 
 Repeats are dropped and any gap in a writer's per-partition sequence is counted as lost. Prints a
 line a second:
@@ -49,6 +53,7 @@ async def main(a):
     ontime, done = defaultdict(int), defaultdict(int)
     last_seq, wseq = {}, defaultdict(int)
     backoff = []                                          # (due, pid, event) waiting to be written back
+    dead = []                                             # events for the DLQ, sent with the next write-back
     caught_up = [False]                                   # a new reader first replays what was written before it
     gc.freeze()                                           # keep startup tables out of the collector's way
 
@@ -75,7 +80,6 @@ async def main(a):
         if not fresh:
             return
         oks = await republish(fresh, a.retry_fail)
-        dead = []
         for e, ok in zip(fresh, oks):
             if ok:
                 late = (time.time_ns() - e["t0"]) / 1e9 > PRIORITIES[e["p"]]
@@ -87,14 +91,17 @@ async def main(a):
             else:                                         # back on failed-writes after a backoff
                 due = time.monotonic() + a.backoff_ms * e["a"] / 1000
                 backoff.append((due, pid, e))
-        if dead:
-            await writer.send_messages(STREAM, DLQ, Partitioning.partition_id(0),
-                                       [SendMessage(msg(**{**e, "ns": time.time_ns()})) for e in dead])
-            done["dlq"] += len(dead)
 
     async def write_back():
+        # Retries due and DLQ events go out from here, one batch per partition every 10 ms, on the writer's
+        # own connection: the readers never wait on a send.
         while True:
             await asyncio.sleep(0.01)
+            if dead:
+                batch = [SendMessage(msg(**{**e, "ns": time.time_ns()})) for e in dead]
+                dead.clear()
+                await writer.send_messages(STREAM, DLQ, Partitioning.partition_id(0), batch)
+                done["dlq"] += len(batch)
             now = time.monotonic()
             due = [b for b in backoff if b[0] <= now]
             if not due:
@@ -112,13 +119,20 @@ async def main(a):
     async def reader(pids):
         c = await connect(a.url)
         consumers = {pid: Consumer.Single(f"{name}-p{pid}") for pid in pids}
+        nxt, committed = {}, {}
         while True:
             more = False
             for pid in pids:
-                # Next + auto-commit: the broker keeps this partition's offset, so a restart resumes here.
+                # Resume from the broker's stored offset once, then read on from our own position. Store the
+                # offset on the broker at most once a second: an offset write on every poll stalls the lane.
+                start = PollingStrategy.Offset(nxt[pid]) if pid in nxt else PollingStrategy.Next()
+                commit = time.monotonic() - committed.get(pid, 0) >= a.commit_s
                 ms = await c.poll_messages(STREAM, FAILED, consumer=consumers[pid], partition_id=pid, count=a.batch,
-                                           auto_commit=True, polling_strategy=PollingStrategy.Next())
+                                           auto_commit=commit, polling_strategy=start)
                 if ms:
+                    if commit:
+                        committed[pid] = time.monotonic()
+                    nxt[pid] = ms[-1].offset() + 1
                     await handle(pid, ms, time.time_ns())
                     more = more or len(ms) == a.batch
             if not more:
@@ -166,4 +180,5 @@ if __name__ == "__main__":
     p.add_argument("--budget-ms", type=float, default=100, help="p99 budget, capture to retrier")
     p.add_argument("--poll-ms", type=float, default=5, help="wait between rounds when nothing more is waiting")
     p.add_argument("--batch", type=int, default=1000)
+    p.add_argument("--commit-s", type=float, default=1, help="how often each partition's offset is stored")
     asyncio.run(main(p.parse_args()))

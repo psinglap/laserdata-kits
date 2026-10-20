@@ -82,7 +82,7 @@ and the cost to keep the lane ready are measured with `iggy-bench` on dedicated 
 | File | What it is |
 |---|---|
 | `publisher.py` | The Event Publisher's capture path: MSK publishes simulated, a share failing (blips, then a surge), every failed event written to `failed-writes` keyed by profile, with lane, first-failure time and a per-partition sequence. Some carry a payload MSK will never accept. |
-| `retrier.py` | The failed-writes processor, sharded by partition. Reads partitions directly with offsets on the broker, re-publishes (`republish()` is the stand-in for your MSK produce), backs off and retries, sends to `failed-writes-dlq` after five attempts; drops repeats, counts sequence gaps as lost. |
+| `retrier.py` | The failed-writes processor, sharded by partition. Reads partitions directly, storing offsets on the broker once a second, re-publishes (`republish()` is the stand-in for your MSK produce), backs off and retries, sends to `failed-writes-dlq` after five attempts; drops repeats, counts sequence gaps as lost. |
 | `s3_replay.py` | Recovered events from S3 replayed in large batches to their own topic, for the noisy-neighbour test. |
 | `kafka_bridge.py` | Copies your failed-writes topic, or a share of your lane topics, into `failed-writes`, read-only, with confluent-kafka. |
 | `common.py` | Names, lanes and SLOs, event names, partitioning, shared by every script. |
@@ -97,10 +97,12 @@ and the cost to keep the lane ready are measured with `iggy-bench` on dedicated 
 2. **Retries that keep failing:** `--retry-fail 0.3` on the retriers (MSK still struggling while they
    re-publish). Pass: P10 still on time through the backoff, `lost 0`; the DLQ holds the `--reject-share`
    events plus the few that fail five times in a row (0.3^5, about 0.2%).
-3. **Restart a retrier:** stop one mid-surge and start it again. Offsets are kept on the broker, so it
-   resumes from its last poll. Pass: back under budget within seconds, `lost 0`. Note: the kit's direct
-   reads commit on poll, so a crash between poll and re-publish can skip that batch; a production retrier
-   stores its offset only after MSK acknowledges (the SDK's consumer reader has `store_offset` for that).
+3. **Restart a retrier:** stop one mid-surge and start it again. Each partition's offset is stored on the
+   broker once a second (`--commit-s`; an offset write on every poll caused tail-latency spikes), so it
+   resumes at most a second behind its last poll and re-publishes those events again (at-least-once).
+   Pass: back under budget within seconds, `lost 0`. Note: the kit stores the offset with a poll, so a
+   crash between that poll and the re-publish can skip that batch; a production retrier stores its offset
+   only after MSK acknowledges (the SDK's consumer reader has `store_offset` for that).
 
 ## Shadow your own traffic
 
