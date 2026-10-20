@@ -31,16 +31,18 @@ async def main(a):
     body = os.urandom(a.size // 2).hex()          # stands in for the description, cast, tags and artwork URLs
     gc.freeze()
     t0 = due = mark = time.monotonic()
-    sent = 0
+    sent, carry = 0, 0.0
     async with p:
         while True:
             t = time.monotonic() - t0
             x = a.x if a.at <= t < a.at + a.for_s else 1
-            per_tick = max(1, int(a.rate * x / 50))
+            carry += a.rate * x / 50                              # records owed this tick, fractions carried over
+            per_tick, carry = int(carry), carry - int(carry)
             ms = [SendMessage(msg(asset=f"T{random.randrange(60000):05d}", change=random.choice(CHANGES),
                                   lang=random.choice(LANGS), body=body)) for _ in range(per_tick)]
             # one batch per tick, round-robin over partitions: a busy neighbour without thousands of tiny requests
-            await p.send_with_partitioning(ms, Partitioning.balanced())
+            if ms:
+                await p.send_with_partitioning(ms, Partitioning.balanced())
             sent += per_tick
             if time.monotonic() - mark >= 1:
                 state = f"release drop {x:g}x" if x > 1 else "steady"

@@ -12,7 +12,8 @@ python -m py_compile common.py viewers.py continue_watching.py content_publish.p
 timeout 80 python -u viewers.py --viewers 20000 --every 10 --end-p 0.01 --switch-s 2 6 > viewers.log 2>&1 &
 sleep 5
 # A 20x release drop next door from second 30 to 50 of the service's run, on the same broker: 50 KB/s, then 1 MB/s.
-# (At 8 MB/s the runner's disk wrote the burst back about 30 s later and stalled the whole box, broker and scripts alike.)
+# (At 8 MB/s, a few seconds about 30 s after the burst failed with the broker and the scripts all stalled, which looks like
+# the runner's disk writing the burst back; a 2-vCPU runner is not the place to measure a large neighbour.)
 timeout 65 python -u content_publish.py --rate 25 --x 20 --at 30 --for 20 > metadata.log 2>&1 &
 timeout 70 python -u continue_watching.py --why > cw.log 2>&1 || true
 wait || true
