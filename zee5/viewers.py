@@ -32,8 +32,8 @@ IDLE, PLAYING, SWITCHING = 0, 1, 2
 class Viewer:
     __slots__ = ("id", "idx", "state", "asset", "dev", "seq", "start_t", "start_pos", "stopping")
 
-    def __init__(self, i):
-        self.id, self.idx = viewer(i), i
+    def __init__(self, i, first=0):
+        self.id, self.idx = viewer(first + i), i
         self.state, self.asset, self.dev = IDLE, None, random.choice(DEVICES)
         self.seq, self.start_t, self.start_pos, self.stopping = 0, 0.0, 0.0, False
 
@@ -66,7 +66,7 @@ async def main(a):
     # A catalogue with a long tail: a few titles carry most of the viewing, like a weekly top-shows list.
     titles = [f"T{t:05d}" for t in range(a.titles)]
     weights = [1 / (r + 1) for r in range(a.titles)]
-    pool = [Viewer(i) for i in range(int(a.viewers * max(1.0, a.peak)))]
+    pool = [Viewer(i, a.first) for i in range(int(a.viewers * max(1.0, a.peak)))]
     slots = max(1, round(a.every / TICK))
     ring = [[] for _ in range(slots)]                       # each viewer beats in its own slot, staggered
     for v in pool:
@@ -186,6 +186,7 @@ if __name__ == "__main__":
     ap.add_argument("--viewers", type=int, default=200_000, help="viewers playing at once, for this process")
     ap.add_argument("--every", type=float, default=10.0, help="seconds between heartbeats per viewer (60 today)")
     ap.add_argument("--partitions", type=int, default=16)
+    ap.add_argument("--first", type=int, default=0, help="first viewer number, to run several processes side by side")
     ap.add_argument("--titles", type=int, default=5000)
     ap.add_argument("--end-p", type=float, default=0.005, help="chance a viewer stops before the next heartbeat")
     ap.add_argument("--no-stop-p", type=float, default=0.15, help="share of stops with no final heartbeat (app closed)")
