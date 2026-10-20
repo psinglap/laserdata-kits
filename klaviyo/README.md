@@ -94,8 +94,8 @@ and the cost to keep the lane ready are measured with `iggy-bench` on dedicated 
    takes. Pass: capture-to-retry p99 under 100 ms, `oldest` stays flat, P10 `on time` stays at 100%, `lost 0`.
    This is the run that sizes the retrier fleet.
 2. **Retries that keep failing:** `--retry-fail 0.3` on the retriers (MSK still struggling while they
-   re-publish). Pass: P10 still on time through the backoff, nothing lost; only `--reject-share` events
-   reach the DLQ.
+   re-publish). Pass: P10 still on time through the backoff, `lost 0`; the DLQ holds the `--reject-share`
+   events plus the few that fail five times in a row (0.3^5, about 0.2%).
 3. **Restart a retrier:** stop one mid-surge and start it again. Offsets are kept on the broker, so it
    resumes from its last poll. Pass: back under budget within seconds, `lost 0`. Note: the kit's direct
    reads commit on poll, so a crash between poll and re-publish can skip that batch; a production retrier
