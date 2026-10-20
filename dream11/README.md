@@ -8,6 +8,7 @@ where they are.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/T1YuouTWRmWzhaiYG98hUv
 - **One slide:** [`LaserData_Dream11_LivePoints.pdf`](LaserData_Dream11_LivePoints.pdf)
 
 ## Why this use case
