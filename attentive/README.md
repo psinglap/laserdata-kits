@@ -54,8 +54,8 @@ python bfcm_flood.py                   # campaign texts next door
 Each prints a line a second (from the kit's CI run):
 
 ```
-[decide-0]  1,626 events/s decided  event-to-decision p50    8.2ms  p99   14.2ms  p99.9   20.0ms  PASS (<50ms)  texts   154/s  repeat triggers held   207/s  out of order 0  missing 0  on another partition 0  subscribers 22,862
-[send]   277 texts/s queued (277 cart, 0 checkout)  event-to-send-intent p50   16.0ms  p99   26.5ms  duplicate texts 0/s (0 total)  subscribers decided by 2+ workers 0  subscribers texted 26,383
+[decide-0]  1,599 events/s decided  event-to-decision p50    9.0ms  p99   17.4ms  p99.9   18.0ms  PASS (<50ms)  texts   152/s  repeat triggers held   208/s  out of order 0  missing 0  on another partition 0  subscribers 22,931
+[send]   280 texts/s queued (280 cart, 0 checkout)  event-to-send-intent p50   19.7ms  p99   31.9ms  duplicate texts 0/s (0 total)  subscribers decided by 2+ workers 0  subscribers texted 26,456
 ```
 
 The business numbers: `duplicate texts`, a second text to the same subscriber inside the cooldown,
@@ -69,19 +69,21 @@ partition` must stay 0 while events are keyed by subscriber.
 writes it to the moment its decision worker has decided it, through Python clients, on whatever
 machine you run it on. On a shared 2-vCPU GitHub runner, with the broker and five Python processes on
 one box, at 3,000 shopping events a second from 200,000 subscribers on 16 partitions (about 230
-sessions a second with two or more triggers), two workers, and 10,000 campaign texts a second next
-door from second 30, CI held event-to-decision p50 8.2 to 8.3 ms, p99 14.5 to 14.6 ms and p99.9
-16.1 to 16.9 ms (medians per second) over 70 steady-state seconds per worker. 69 of 70 seconds per
-worker were inside the 50 ms budget; the one that wasn't (p99 115 ms) was the same second on both
-workers, a pause on the runner. Median p99 was 14.4 to 14.8 ms before the campaign blast and 14.4 to
-14.6 ms during it. Event to send-intent, through the worker to the send side, held p50 16.5 ms and
-p99 27.0 ms. Each worker queued about 140 texts a second and held about 190 repeat triggers a second;
-across 26,487 subscribers texted, the send side counted 0 duplicate texts and 0 subscribers decided
-by two workers, and no event was out of order, missing or on another partition. Checkout reminders
-stayed at 0 because every checkout in the kit's sessions follows an add to cart that already queued a
-text. That is the end-to-end lane through this demo code, not the broker alone. The broker's own
-tail latency and cost per billion events are measured with `iggy-bench` on dedicated machines
-(`bench/PLAN.md`).
+sessions a second with two or more triggers, 6,000 events a second for the first 15 s), two workers,
+and 10,000 campaign texts a second next door from second 30, CI held event-to-decision p50 9.2 ms,
+p99 17.2 to 17.4 ms and p99.9 18.4 ms (medians per second) over 70 steady-state seconds per worker.
+69 of 70 seconds per worker were inside the 50 ms budget; the one that wasn't (p99 81 to 116 ms) was
+the same second on both workers, a pause on the runner. Median p99 was 16.7 to 17.1 ms before the
+campaign blast and 17.2 to 17.4 ms during it. Event to send-intent, through the worker to the send
+side, held p50 20.6 ms and p99 34.0 ms. Each worker queued about 140 texts a second and held about
+190 repeat triggers a second; across 26,499 subscribers texted, the send side counted 0 duplicate
+texts and 0 subscribers decided by two workers, and no event was out of order, missing or on another
+partition. Checkout reminders stayed at 0 because every checkout in the kit's sessions follows an add
+to cart that already queued a text. That is the end-to-end lane through this demo code, not the broker
+alone. An earlier version of the kit polled idle partitions every 2 ms on two connections per worker;
+on one runner it missed the budget in 43 of 65 seconds, most likely because that polling competed with
+the broker for two vCPUs. Workers now read on one connection and wait 5 ms when nothing is waiting. The broker's own tail latency and cost per billion
+events are measured with `iggy-bench` on dedicated machines (`bench/PLAN.md`).
 
 | File | What it is |
 |---|---|
