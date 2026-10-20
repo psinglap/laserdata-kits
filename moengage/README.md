@@ -7,6 +7,7 @@ clusters, so nothing else has to move.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/Q7WHXiENSMgBdKye4XdZjx
 - **One slide:** [`LaserData_MoEngage_SmartTriggers.pdf`](LaserData_MoEngage_SmartTriggers.pdf)
 
 ## Why this use case
