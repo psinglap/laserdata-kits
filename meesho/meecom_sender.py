@@ -62,7 +62,8 @@ async def main(a):
             if bucket["tokens"] >= 1:
                 bucket["tokens"] -= 1
                 break
-            await asyncio.sleep(max(0.001, (1 - bucket["tokens"]) / a.campaign_per_s))
+            # out of tokens: wait for 20 ms worth at once, so a throttled reader wakes 50 times a second, not per message
+            await asyncio.sleep(max(0.001, (a.campaign_per_s / 50 - bucket["tokens"]) / a.campaign_per_s))
         c = load(m.payload())
         camp_wait.add((time.time_ns() - c["ns"]) / 1e6)
         stats["campaign"] += 1
