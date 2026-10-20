@@ -55,7 +55,9 @@ async def main(a):
             await client.create_topic(STREAM, ETA, 8)
         except RuntimeError:
             pass                                             # created by track.py in the meantime
-    etas = await client.consumer_group("fleet-eta-check", STREAM, ETA, polling_strategy=PollingStrategy.Next(),
+    checker = IggyClient.from_connection_string(a.url)      # its own connection, apart from the producers
+    await checker.connect()
+    etas = await checker.consumer_group("fleet-eta-check", STREAM, ETA, polling_strategy=PollingStrategy.Next(),
                                        batch_length=2000, auto_commit=AutoCommit.Interval(timedelta(seconds=1)),
                                        poll_interval=timedelta(microseconds=500))
 

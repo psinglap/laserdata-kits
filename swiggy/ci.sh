@@ -8,7 +8,7 @@ docker compose up -d
 for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; sleep 1; done
 pip install -q -r requirements.txt
 python -m py_compile common.py fleet.py track.py retry_storm.py confluent_bridge.py
-KIT_DEBUG=1 timeout 80 python -u fleet.py --keep-hours 0 --partners 10000 --every 5 --assign-p 0.3 --wait-s 10 40 > fleet.log 2>&1 &
+KIT_DEBUG=1 timeout 80 python -u fleet.py --partners 10000 --every 5 --assign-p 0.3 --wait-s 10 40 > fleet.log 2>&1 &
 sleep 5
 KIT_DEBUG=1 timeout 70 python -u track.py --refresh 5 > track.log 2>&1 || true
 wait || true
