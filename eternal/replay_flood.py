@@ -22,17 +22,21 @@ async def main(a):
     p = await client.producer(STREAM, REPLAY, topic_partitions_count=a.partitions,
                               mode=DirectProducerConfig(batch_length=1000, linger_time=timedelta(milliseconds=1)))
     body = os.urandom(a.size // 2).hex()          # stands in for a recorded request
-    per_tick = max(1, int(a.mbps * 1e6 / a.size / 100))
+    rate = a.mbps * 1e6 / a.size                  # messages per second while the replay runs
     t0 = due = mark = time.monotonic()
-    sent = 0
+    sent, owed = 0, 0.0
     async with p:
         while True:
             t = time.monotonic() - t0
             on = not a.at or a.at <= t < a.at + a.for_s
             if on:
-                ms = [SendMessage(msg(kind="recorded.request", body=body)) for _ in range(per_tick)]
-                await p.send_with_partitioning(ms, Partitioning.balanced())
-                sent += per_tick
+                owed += rate / 100
+                n, owed = int(owed), owed - int(owed)
+                chunks = [[SendMessage(msg(kind="recorded.request", body=body)) for _ in range(n // a.partitions + (i < n % a.partitions))]
+                          for i in range(a.partitions)]
+                # One batch per partition, all sent at once, so the replay is not limited by one round trip per tick.
+                await asyncio.gather(*(p.send_with_partitioning(ms, Partitioning.partition_id(i)) for i, ms in enumerate(chunks) if ms))
+                sent += n
             if time.monotonic() - mark >= 1:
                 state = "replay on" if on else "idle"
                 print(f"[replay] {state}  {sent:,} msgs/s  ~{sent * a.size / 1e6:.1f} MB/s on '{REPLAY}'", flush=True)

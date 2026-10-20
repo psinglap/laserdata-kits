@@ -143,13 +143,15 @@ async def main(a):
     async def report():
         while True:
             await asyncio.sleep(1)
-            checked = stats["checked"]
-            pct = 100 * stats["stale"] / checked if checked else 0
+            n, stale = stats["checked"], stats["stale"]
+            stats["total_checked"] += n
+            stats["total_stale"] += stale
+            pct = 100 * stale / n if n else 0
             cooking = sum(len(k.cooking) for k in kitchens.values())
-            print(f"[kitchens] {stats['events']:>6,} kitchen events/s  orders accepted {stats['accepted']:,}  "
-                  f"predictions checked {checked:,}  made on a stale kitchen view {stats['stale']:,} ({pct:.3f}%)  "
-                  f"orders cooking {cooking:,}", flush=True)
-            stats["events"] = 0
+            print(f"[kitchens] {stats['events']:>6,} kitchen events/s  predictions checked {n:>5,}/s  "
+                  f"made on a stale kitchen view {pct:6.3f}%  (all: {stats['total_stale']:,} of {stats['total_checked']:,})  "
+                  f"orders accepted {stats['accepted']:,}  cooking {cooking:,}", flush=True)
+            stats["events"] = stats["checked"] = stats["stale"] = 0
 
     await asyncio.gather(kitchen_clock(), orders.consume_messages(on_order, asyncio.Event()), report())
 

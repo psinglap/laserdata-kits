@@ -35,14 +35,13 @@ lane = [float(re.search(r"p99 +([0-9.]+)ms", l).group(1)) for l in open("fpt.log
 if len(lane) > 50:
     print("event-to-feature-view p99, median per second: before the replay %.1f ms (s 12-28), during the replay %.1f ms (s 33-49)" % (
         st.median(lane[12:29]), st.median(lane[33:50])))
-k = [l for l in open("kitchens.log") if re.search(r"predictions checked [1-9]", l)]
+k = [l for l in open("kitchens.log") if re.search(r"predictions checked +[1-9][0-9,]*/s", l)][10:]
 if k:
-    last = k[-1]
-    print("predictions checked %s, made on a stale kitchen view %s" % (
-        re.search(r"predictions checked ([0-9,]+)", last).group(1), re.search(r"stale kitchen view (.*?\))", last).group(1)))
+    print("FPT predictions made on a stale kitchen view: median %.3f%% per second, max %.3f%% (%d s)" % (
+        st.median(num(r"stale kitchen view +([0-9.]+)%", k)), max(num(r"stale kitchen view +([0-9.]+)%", k)), len(k)))
 PY
 grep -Eq "orders accepted [1-9]" kitchens.log || { echo "no orders accepted"; exit 1; }
-grep -Eq "predictions checked [1-9]" kitchens.log || { echo "no FPT predictions checked against the truth"; exit 1; }
-echo "--- replay.log"; grep -m 3 "replay on" replay.log || true
+grep -Eq "predictions checked +[1-9][0-9,]*/s" kitchens.log || { echo "no FPT predictions checked against the truth"; exit 1; }
+echo "--- replay.log"; grep -m 3 "replay on" replay.log | tail -n 2 || true
 grep -q "replay on" replay.log || { echo "benchmark replay did not run"; exit 1; }
 echo "Kit OK on Apache Iggy 0.9.0"
