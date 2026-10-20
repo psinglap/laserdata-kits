@@ -7,3 +7,4 @@ Apache Iggy 0.9.0 broker on each push.
 | Account | Use case | Folder |
 |---|---|---|
 | Zepto | Real-time hub stock and prices for search re-validation, beside MSK | [`zepto/`](zepto/) |
+| Swiggy | Delivery partner location pings for the tracking screen and last-mile ETA, beside Confluent | [`swiggy/`](swiggy/) |
