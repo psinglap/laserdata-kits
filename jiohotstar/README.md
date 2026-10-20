@@ -6,6 +6,7 @@ alerting, in milliseconds, even in the death overs. It runs beside Kafka, so not
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/NLs7irAzWx8wD9ARog2hx6
 - **One slide:** [`LaserData_JioHotstar_PlaybackHealth.pdf`](LaserData_JioHotstar_PlaybackHealth.pdf)
 
 ## Why this use case
