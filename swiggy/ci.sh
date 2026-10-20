@@ -8,12 +8,12 @@ docker compose up -d
 for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; sleep 1; done
 pip install -q -r requirements.txt
 python -m py_compile common.py fleet.py track.py retry_storm.py confluent_bridge.py
-KIT_DEBUG=1 timeout 80 python -u fleet.py --partners 10000 --every 5 --assign-p 0.3 --wait-s 10 40 > fleet.log 2>&1 &
+timeout 80 python -u fleet.py --partners 10000 --every 5 --assign-p 0.3 --wait-s 10 40 > fleet.log 2>&1 &
 sleep 5
-KIT_DEBUG=1 timeout 70 python -u track.py --refresh 5 > track.log 2>&1 || true
+timeout 70 python -u track.py --refresh 5 --why > track.log 2>&1 || true
 wait || true
-echo "--- fleet.log"; grep -v debug fleet.log | tail -n 8; grep debug fleet.log | tail -n 30
-echo "--- track.log"; grep -v debug track.log | tail -n 8; grep debug track.log | head -n 60
+echo "--- fleet.log"; grep -v "ETAs checked 0 " fleet.log | tail -n 8
+echo "--- track.log"; tail -n 12 track.log
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" track.log | cut -c1-120 || true
 # Skip a 10 s warm-up while topics come online; a shared CI runner may blip, so require 95% of seconds to pass.
 steady=$(grep -E '\[track\] +[1-9][0-9,]* pings/s' track.log | tail -n +11 || true)
@@ -21,10 +21,26 @@ live=$(grep -c 'PASS (' <<<"$steady" || true)
 fail=$(grep -c 'FAIL (' <<<"$steady" || true)
 echo "steady-state seconds with live traffic: PASS $live, FAIL $fail"
 if [ "$live" -lt 30 ] || [ $(( fail * 100 )) -gt $(( (live + fail) * 5 )) ]; then echo "lane check failed"; exit 1; fi
+# Steady-state summary: median of the per-second figures, for the README.
+python - <<'PY'
+import re, statistics as st
+t = [l for l in open("track.log") if re.search(r"\[track\] +[1-9][0-9,]* pings/s", l)][10:]
+f = [l for l in open("fleet.log") if re.search(r"ETAs checked [1-9]", l)][10:]
+num = lambda pat, ls: [float(re.search(pat, l).group(1).replace(",", "")) for l in ls]
+if t:
+    print("steady-state medians: pings/s %.0f  ping-to-tracker p50 %.1f ms  p99 %.1f ms  p99.9 %.1f ms" % tuple(
+        st.median(num(p, t)) for p in (r"\] +([0-9,]+) pings/s", r"p50 +([0-9.]+)ms", r"p99 +([0-9.]+)ms", r"p99.9 +([0-9.]+)ms")))
+if f:
+    print("ETAs on the latest ping %.2f%%  one behind %.2f%%  two or more behind %.3f%%  (median per second, %d s)" % (
+        st.median(num(r"latest ping +([0-9.]+)%", f)), st.median(num(r"one ping behind +([0-9.]+)%", f)),
+        st.median(num(r"two or more behind +([0-9.]+)%", f)), len(f)))
+    if st.median(num(r"two or more behind +([0-9.]+)%", f)) > 1.0:
+        raise SystemExit("too many ETAs computed on a position two or more pings old")
+PY
 grep -Eq "ETAs published [1-9]" track.log || { echo "no ETAs published"; exit 1; }
 grep -Eq "ETAs checked [1-9]" fleet.log || { echo "no ETAs checked against the truth"; exit 1; }
 # The retry-storm neighbour must at least run against the same broker.
-timeout 10 python -u retry_storm.py --mbps 0.2 --x 5 --at 3 --for 4 > storm.log 2>&1 || true
+timeout 25 python -u retry_storm.py --mbps 0.2 --x 5 --at 4 --for 8 > storm.log 2>&1 || true
 echo "--- storm.log"; cat storm.log
 grep -q "storm 5x" storm.log || { echo "retry storm did not run"; exit 1; }
 echo "Kit OK on Apache Iggy 0.9.0"

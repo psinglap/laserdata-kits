@@ -12,7 +12,6 @@ A replaced ping on the tracking screen is the cost of a slow lane.
 import argparse
 import asyncio
 import math
-import os
 import random
 import time
 from collections import defaultdict, deque
@@ -152,20 +151,9 @@ async def main(a):
         stats["checked"] += 1
         stats["behind1" if behind == 1 else "behind2" if behind >= 2 else "latest"] += 1
 
-    lagw = []
-
-    async def lag():
-        while True:
-            t = time.monotonic()
-            await asyncio.sleep(0.01)
-            lagw.append((time.monotonic() - t - 0.01) * 1e3)
-
     async def report():
         while True:
             await asyncio.sleep(1)
-            if os.environ.get("KIT_DEBUG") and lagw:
-                print(f"[debug] fleet event-loop lag max {max(lagw):.1f} ms", flush=True)
-                lagw.clear()
             c = stats["checked"]
             pct = lambda k: 100 * stats[k] / c if c else 0.0
             on_trip = sum(1 for p in pool if p.order)
@@ -175,7 +163,7 @@ async def main(a):
             for k in ("pings", "checked", "latest", "behind1", "behind2"):
                 stats[k] = 0
 
-    await asyncio.gather(ride(), etas.consume_messages(on_eta, asyncio.Event()), report(), lag())
+    await asyncio.gather(ride(), etas.consume_messages(on_eta, asyncio.Event()), report())
 
 
 if __name__ == "__main__":

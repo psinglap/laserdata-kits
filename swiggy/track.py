@@ -47,7 +47,7 @@ async def main(a):
     recent = defaultdict(lambda: deque(maxlen=a.window))     # partner -> recent (seq, ns, lat, lon, order)
     trip = {}                                                # partner -> [order, leg, pickup, drop]
     lat, stats = Window(), defaultdict(int)
-    to_broker, from_broker, loop_lag = Window(), Window(), Window()     # where the time goes (KIT_DEBUG=1)
+    to_broker, from_broker, loop_lag = Window(), Window(), Window()     # where the time goes (--why)
 
     async def on_ping(m):
         p = load(m.payload())
@@ -115,9 +115,9 @@ async def main(a):
                   f"p99.9 {r['p999']:6.1f}ms  {ok} (<{a.budget_ms}ms)  ETAs published {stats['etas']:,}  "
                   f"active orders {len(trip):,}", flush=True)
             stats.clear()
-            if os.environ.get("KIT_DEBUG"):
+            if a.why:
                 tb, fb, ll = to_broker.flush(), from_broker.flush(), loop_lag.flush()
-                print(f"[debug] ping->broker p50 {tb['p50']:.1f} p99 {tb['p99']:.1f}  broker->tracker p50 {fb['p50']:.1f} "
+                print(f"[why]   ping->broker p50 {tb['p50']:.1f} p99 {tb['p99']:.1f}  broker->tracker p50 {fb['p50']:.1f} "
                       f"p99 {fb['p99']:.1f}  event-loop lag p99 {ll['p99']:.1f} max {ll['max']:.1f} ms", flush=True)
 
     async def lag():
@@ -136,4 +136,5 @@ if __name__ == "__main__":
     p.add_argument("--refresh", type=float, default=10, help="seconds between ETA refreshes per order")
     p.add_argument("--window", type=int, default=6, help="pings per partner kept for the current-speed feature")
     p.add_argument("--budget-ms", type=int, default=200)
+    p.add_argument("--why", action="store_true", help="also print where the time goes: ping to broker, broker to tracker")
     asyncio.run(main(p.parse_args()))
