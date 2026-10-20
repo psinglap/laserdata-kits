@@ -7,6 +7,7 @@ It runs between your collectors and ClickHouse, so nothing else has to move.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs, and a real ClickHouse.
 
+- **Write-up:** https://claude.ai/artifact/WzFLU1PDiFtmbwzxvZws5t
 - **One slide:** [`LaserData_SigNoz_IngestBuffer.pdf`](LaserData_SigNoz_IngestBuffer.pdf)
 
 ## Why this use case
