@@ -25,3 +25,4 @@ Apache Iggy 0.9.0 broker on each push.
 | Dream11 | Live fantasy points: every ball of every live match to every points node, with rebuild from the log, beside Kafka | [`dream11/`](dream11/) |
 | The Trade Desk | Spend-to-pacing loop: every win's spend into the pacing controllers, and their pause and throttle decisions back to every bid server, beside Kafka | [`the-trade-desk/`](the-trade-desk/) |
 | Magnite | DSP appetite lane for traffic shaping: which DSPs are bidding on which supply, to every shaping node, with rebuild from the log, beside Kafka | [`magnite/`](magnite/) |
+| Braze | Currents connector lane: engagement events on one topic per connector, each read at its partner's pace from its own offset, so one partner's outage or rate limit delays only its own export, beside Kafka | [`braze/`](braze/) |
