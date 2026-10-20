@@ -45,7 +45,18 @@ Each prints a line a second, and a tally when a cap window closes:
 [cap] window … closed: impressions …  household-campaign pairs at cap …  over-cap impressions … (…%)
 ```
 
-%%CI%%
+**What the numbers mean.** The kit times each impression from the moment one `adserver.py` serves it to the
+moment another has applied it, through Python clients, on whatever machine you run it on. CI result on a shared
+2-vCPU runner, reduced scale (3 ad servers at 1,500 slots/s each over 50,000 households, 15-second windows,
+[run 39467852226](https://github.com/psinglap/laserdata-kits/actions/runs/39467852226)): exposure-to-ad-server
+**p50 6.7 ms, p99 12.9 ms, p99.9 15 ms** (medians of 66 steady-state seconds, worst second p99 39.5 ms), 66 of 66
+seconds inside the 50 ms budget. With 2 MB/s of log-level data on the same broker, p99 was 13.3 ms against 12.9 ms
+before. About 2,500 household-campaign pairs reached their cap in each window, and **1 to 4 impressions in
+~67,000 (0.001–0.006%) went past a cap**. A restarted ad server rebuilt its cap view from the log in 1.5 s
+(122,936 impressions, 41,201 households) before serving, with no sequence gaps. The same run with every server
+applying the others' impressions 2 seconds late (`--hold-ms 2000`): **0.78–0.79% over cap, about 530 impressions
+a window**, some 200 times more. That is the end-to-end lane through this demo code, not the broker alone; the
+broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
 
 | File | What it is |
 |---|---|
