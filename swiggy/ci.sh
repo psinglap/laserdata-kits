@@ -20,11 +20,11 @@ steady=$(grep -E '\[track\] +[1-9][0-9,]* pings/s' track.log | tail -n +11 || tr
 live=$(grep -c 'PASS (' <<<"$steady" || true)
 fail=$(grep -c 'FAIL (' <<<"$steady" || true)
 echo "steady-state seconds with live traffic: PASS $live, FAIL $fail"
-[ "$live" -ge 30 ] && [ $(( fail * 100 )) -le $(( (live + fail) * 5 )) ]
-grep -Eq "ETAs published [1-9]" track.log
-grep -Eq "ETAs checked [1-9]" fleet.log
+if [ "$live" -lt 30 ] || [ $(( fail * 100 )) -gt $(( (live + fail) * 5 )) ]; then echo "lane check failed"; exit 1; fi
+grep -Eq "ETAs published [1-9]" track.log || { echo "no ETAs published"; exit 1; }
+grep -Eq "ETAs checked [1-9]" fleet.log || { echo "no ETAs checked against the truth"; exit 1; }
 # The retry-storm neighbour must at least run against the same broker.
 timeout 10 python -u retry_storm.py --mbps 0.2 --x 5 --at 3 --for 4 > storm.log 2>&1 || true
 echo "--- storm.log"; cat storm.log
-grep -q "storm 5x" storm.log
+grep -q "storm 5x" storm.log || { echo "retry storm did not run"; exit 1; }
 echo "Kit OK on Apache Iggy 0.9.0"

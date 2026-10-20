@@ -8,7 +8,8 @@ for the tracking screen, carrying the sequence of the ping it was computed from.
 
 Prints ping-to-tracker latency every second (from the partner's ping being created to the
 tracker having applied it) with PASS or FAIL against --budget-ms. On start it rebuilds
-every partner's recent pings by replaying the last 30 seconds, so it holds no state.
+every partner's recent pings and trip by replaying the retained topics, so it holds no state;
+replayed pings are not counted as live latency.
 """
 import argparse
 import asyncio
@@ -33,8 +34,7 @@ async def main(a):
         await asyncio.sleep(1)
     started_ns = time.time_ns()
     poll = dict(batch_length=5000, auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
-    pings = await client.consumer_group(f"track-pings-{os.getpid()}", STREAM, PINGS,
-                                        polling_strategy=PollingStrategy.Timestamp((started_ns // 1000) - a.replay_s * 1_000_000), **poll)
+    pings = await client.consumer_group(f"track-pings-{os.getpid()}", STREAM, PINGS, polling_strategy=PollingStrategy.First(), **poll)
     legs = await client.consumer_group(f"track-legs-{os.getpid()}", STREAM, LEGS, polling_strategy=PollingStrategy.First(), **poll)
     out = await client.producer(STREAM, ETA, topic_partitions_count=ETA_PARTITIONS)
     recent = defaultdict(lambda: deque(maxlen=a.window))     # partner -> recent (seq, ns, lat, lon, order)
@@ -114,6 +114,5 @@ if __name__ == "__main__":
     p.add_argument("--url", default=DEFAULT_URL)
     p.add_argument("--refresh", type=float, default=10, help="seconds between ETA refreshes per order")
     p.add_argument("--window", type=int, default=6, help="pings per partner kept for the current-speed feature")
-    p.add_argument("--replay-s", type=int, default=30, help="seconds of pings replayed on start")
     p.add_argument("--budget-ms", type=int, default=200)
     asyncio.run(main(p.parse_args()))
