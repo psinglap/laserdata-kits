@@ -62,7 +62,8 @@ async def main(a):
         if ev == "purchase":
             bought[sub] = e["ns"]
         elif ev in INTENT:
-            if e["ns"] - texted.get(sub, -cool_ns) < cool_ns or e["ns"] - bought.get(sub, -cool_ns) < cool_ns:
+            recent = max(texted.get(sub, -cool_ns), bought.get(sub, -cool_ns))
+            if e["ns"] - recent < cool_ns:
                 st["held"] += 1                           # this subscriber already has a text, or just bought
             else:
                 texted[sub] = e["ns"]
