@@ -6,6 +6,7 @@ trade shows the stock, even at the 9:15 open. It runs beside your Kafka, so noth
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/34FzTVXuMgT7Y4PdaU64XY
 - **One slide:** [`LaserData_Groww_PositionUpdates.pdf`](LaserData_Groww_PositionUpdates.pdf)
 
 ## Why this use case
