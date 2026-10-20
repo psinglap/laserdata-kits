@@ -59,7 +59,7 @@ classifier in the kit is a stand-in that takes no time; your models add their ow
 | File | What it is |
 |---|---|
 | `chat_servers.py` | A fleet of chat servers. Every turn publishes the user's message and the reply, with the conversation's turn sequence, to `turns`, keyed by conversation. Each server reads `safety-verdicts` on its own connection, and before building a conversation's next turn checks it has the verdict for that conversation's flagged turn. |
-| `classifiers.py` | The trust and safety classifiers. Classifies each turn (`classify()` is where your models go), keeps a strike count per conversation, and publishes BLOCK and LIFELINE verdicts that name the turn they cover. Prints the lane's p99. |
+| `classifiers.py` | The trust and safety classifiers. Classifies each turn (`classify()` is where your models go), reads every turns partition directly (no consumer group), keeps a strike count per conversation, and publishes BLOCK and LIFELINE verdicts that name the turn they cover. Prints the lane's p99. |
 | `prompt_firehose.py` | Full prompts (templates, character definitions, memory) on their own topic, for the isolation test. |
 | `warpstream_bridge.py` | Copies your turns or prompts topic from WarpStream (Kafka protocol) into Iggy as a read-only consumer group, for a shadow run on real traffic. |
 | `bench/PLAN.md` | The benchmark we run with you; rules fixed before results. |

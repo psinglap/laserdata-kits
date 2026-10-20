@@ -48,7 +48,7 @@ async def main(a):
                 sent, t0 = 0, time.monotonic()
             due += 0.01
             await asyncio.sleep(max(0.0, due - time.monotonic()))
-    print("[prompts] done", flush=True)
+    print("[prompts] done", flush=True)    # every prompt is flushed: the producer's `async with` waited for it
 
 
 if __name__ == "__main__":
@@ -59,3 +59,6 @@ if __name__ == "__main__":
     ap.add_argument("--at", type=float, default=0, help="seconds to wait before starting")
     ap.add_argument("--duration", type=float, default=0, help="seconds to run (0 = until stopped)")
     asyncio.run(main(ap.parse_args()))
+    # Leave without the interpreter's teardown: dropping the SDK client's runtime there aborted the process
+    # with a core dump in CI (once in about 20 runs), and writing the core loaded the shared runner.
+    os._exit(0)
