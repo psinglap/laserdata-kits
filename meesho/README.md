@@ -6,6 +6,7 @@ Every order update your services push to Meecom reaches the sender in millisecon
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/FV1CdVVi38Acfdv86HkWeA
 - **One slide:** [`LaserData_Meesho_OrderUpdates.pdf`](LaserData_Meesho_OrderUpdates.pdf)
 
 ## Why this use case
