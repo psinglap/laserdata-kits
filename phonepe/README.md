@@ -14,12 +14,12 @@ open-source engine LaserData builds and runs.
 From PhonePe's own posts:
 
 - The real-time fraud model for P2P transfers declines fraud during the payment. Most of its inputs
-  were turned into real-time aggregates, and maintaining those real-time variables was "the first
-  major challenge" of moving from batch to real time (PhonePe Tech Blog, Jul 2022, "Building
+  were turned into real-time aggregates: "The first major challenge while moving in real time was
+  maintaining real-time variables that are needed as the model input" (PhonePe Tech Blog, Jul 2022, "Building
   PhonePe's Real-Time Transaction Model to prevent Frauds: A Journey").
 - Fraud checks run "within a few milliseconds during transactions" on over 31 crore transactions a
-  day, and Guardian's Action Intelligence "aggregates user events in real time, including device
-  usage, transaction frequency, and activity" (PhonePe blog, Feb 2025, "PhonePe's Guardrails").
+  day, and Action Intelligence "aggregates various user events by tracking device usage, transaction
+  frequency, and user activity in real time" (PhonePe blog, Feb 2025, "PhonePe's Guardrails").
 - Events reach Kafka through a client that spools to disk and an IngestionService. That path is
   built for resilience: analytics p99 is under 3 s. A direct path exists for "critical,
   time-sensitive applications" (PhonePe Tech Blog, Oct 2023, "The Kafka Edge").
@@ -64,12 +64,13 @@ check started. A slow or congested lane shows up there first, and most of all in
 **What the numbers mean.** The kit times each velocity update from the moment `payments.py`
 completes the payment to the moment `risk.py` has applied it, through Python clients, on whatever
 machine you run it on. On a shared GitHub runner (2 vCPU), with the broker and three Python
-processes on one box, a green CI run at 500 payments a second (5% in bursts, 2× for 15 s as the
-peak) held p50 12.0 ms, p99 23.4 ms and p99.9 25.0 ms (median per second over 63 steady-state
-seconds, no second over the 50 ms budget). Through the peak (1,000 payments a second) the median
-per-second p99 was 23.3 ms, worst 24.2 ms. Of 5,604 risk checks on repeat payers (1,668 of them in
-bursts), none missed the payer's previous payment, and the example rule fired 762 times. A 1 MB/s
-analytics stream ran next door for 33 s. That is the end-to-end lane through this demo code at
+processes on one box, two green CI runs at 500 payments a second (5% in bursts, 2× for 15 s as the
+peak) held p50 12.0 to 12.3 ms, p99 23.4 to 24.7 ms and p99.9 25.0 to 26.4 ms (median per second
+over 63 steady-state seconds each, no second over the 50 ms budget). Through the peak (1,000
+payments a second) the median per-second p99 was 23.3 to 23.5 ms, worst 24.3 ms. Of about 5,600
+risk checks on repeat payers in each run (about 1,700 of them in bursts), none missed the payer's
+previous payment, and the example rule fired about 770 times. A 1 MB/s analytics stream ran next
+door for 33 s. That is the end-to-end lane through this demo code at
 reduced scale, not the broker alone; the broker's own tail latency is measured with `iggy-bench` on
 dedicated machines (`bench/PLAN.md`). On a laptop or a larger machine, raise the rates.
 
