@@ -54,8 +54,8 @@ python bfcm_flood.py                   # campaign texts next door
 Each prints a line a second (from the kit's CI run):
 
 ```
-[decide-0]  1,599 events/s decided  event-to-decision p50    9.0ms  p99   17.4ms  p99.9   18.0ms  PASS (<50ms)  texts   152/s  repeat triggers held   208/s  out of order 0  missing 0  on another partition 0  subscribers 22,931
-[send]   280 texts/s queued (280 cart, 0 checkout)  event-to-send-intent p50   19.7ms  p99   31.9ms  duplicate texts 0/s (0 total)  subscribers decided by 2+ workers 0  subscribers texted 26,456
+[decide-0]  1,571 events/s decided  event-to-decision p50    8.0ms  p99   13.0ms  p99.9   13.9ms  PASS (<50ms)  texts   143/s  repeat triggers held   211/s  out of order 0  missing 0  on another partition 0  subscribers 22,971
+[send]   261 texts/s queued (261 cart, 0 checkout)  event-to-send-intent p50   25.3ms  p99   43.6ms  duplicate texts 0/s (0 total)  subscribers decided by 2+ workers 0  subscribers texted 26,485
 ```
 
 The business numbers: `duplicate texts`, a second text to the same subscriber inside the cooldown,
@@ -67,30 +67,33 @@ partition` must stay 0 while events are keyed by subscriber.
 
 **What the numbers mean.** The kit times each shopping event from the moment `storefront.py`
 writes it to the moment its decision worker has decided it, through Python clients, on whatever
-machine you run it on. On a shared 2-vCPU GitHub runner, with the broker and five Python processes on
-one box, at 3,000 shopping events a second from 200,000 subscribers on 16 partitions (about 230
-sessions a second with two or more triggers, 6,000 events a second for the first 15 s), two workers,
-and 10,000 campaign texts a second next door from second 30, two CI runs held event-to-decision p50
-8.6 to 9.2 ms, p99 16.7 to 17.4 ms and p99.9 18.1 to 18.4 ms (medians per second) over 70
-steady-state seconds per worker. 69 of 70 seconds per worker were inside the 50 ms budget in each run;
-the one that wasn't (p99 81 to 200 ms) was the same second on both workers, near the end of the run.
-That happened in every run at about the same point, so it may be the broker or the runner doing
-periodic work rather than random noise; we have not found the cause. Median p99 was 16.7 to 17.4 ms
-both before the campaign blast and during it. Event to send-intent, through the worker to the send
-side, held p50 20.2 to 20.6 ms and p99 33.1 to 34.0 ms. Each worker queued about 140 texts a second
-and held about 190 repeat triggers a second; across about 26,500 subscribers texted per run, the send
-side counted 0 duplicate texts and 0 subscribers decided by two workers, and no event was out of
-order, missing or on another partition. Checkout reminders stayed at 0 because every checkout in the kit's sessions follows an add
-to cart that already queued a text. That is the end-to-end lane through this demo code, not the broker
-alone. An earlier version of the kit polled idle partitions every 2 ms on two connections per worker;
-on one runner it missed the budget in 43 of 65 seconds, most likely because that polling competed with
-the broker for two vCPUs. Workers now read on one connection and wait 5 ms when nothing is waiting. The broker's own tail latency and cost per billion
-events are measured with `iggy-bench` on dedicated machines (`bench/PLAN.md`).
+machine you run it on. On a shared GitHub runner, with the broker and five Python processes on one
+box, at 3,000 shopping events a second from 200,000 subscribers on 16 partitions (about 230 sessions
+a second with two or more triggers, 6,000 events a second for the first 15 s), two workers, and
+10,000 campaign texts a second next door from second 30, two CI runs held event-to-decision p50 6.3
+to 7.0 ms, p99 11.7 to 14.2 ms and p99.9 12.3 to 15.2 ms (medians per second) over 70 steady-state
+seconds per worker, with median p99 the same before and during the campaign blast. One run had every
+second inside the 50 ms budget (worst second 23 ms); the other had 2 to 3 seconds out of 70 over it,
+the same seconds on both workers (worst 449 ms), which points at the runner or the broker rather than
+the workers. Event to send-intent, through the worker and its 20 ms send batches to the send side,
+held p50 24 to 26 ms and p99 41 to 44 ms. Each worker queued about 140 texts a second and held about
+190 repeat triggers a second; across about 26,500 subscribers texted per run, the send side counted 0
+duplicate texts and 0 subscribers decided by two workers, and no event was out of order, missing or
+on another partition. Checkout reminders stayed at 0 because every checkout in the kit's sessions
+follows an add to cart that already queued a text.
+
+Earlier versions of the worker stored its offset on the broker on every poll and sent each round's
+texts from inside the read loop. They passed on some runners and missed the budget in most seconds on
+others (p50 still 6 to 10 ms, p99 70 to 470 ms, both workers in step). The workers now store offsets
+once a second and send from their own task in 20 ms batches; we have not proven which change mattered.
+All of this is the end-to-end lane through this demo code, not the broker alone. The broker's own tail
+latency and cost per billion events are measured with `iggy-bench` on dedicated machines
+(`bench/PLAN.md`).
 
 | File | What it is |
 |---|---|
 | `storefront.py` | Shopping sessions (views, add to cart, checkout, purchase, clicks), keyed by subscriber, with a per-subscriber sequence. `--route spread` drops the key to show the problem. |
-| `decision.py` | A decision worker: owns partitions `p % workers == worker`, reads them directly, decides one reminder per subscriber per cooldown, writes it to `send-intents`. Offsets stored per partition. |
+| `decision.py` | A decision worker: owns partitions `p % workers == worker`, reads them directly, decides one reminder per subscriber per cooldown, writes it to `send-intents` from its own task every 20 ms. Offsets stored per partition, once a second. |
 | `send_audit.py` | The send side: reads every queued text, counts duplicate texts and subscribers decided by two or more workers. |
 | `bfcm_flood.py` | Campaign texts on their own topic, for the noisy-neighbour test. |
 | `pulsar_bridge.py` | Copies shopping events from your Pulsar topics into the lane, read-only, on its own `iggy-shadow` subscription. |
@@ -106,7 +109,8 @@ events are measured with `iggy-bench` on dedicated machines (`bench/PLAN.md`).
    shared subscription spreads them. Expect the send side to count duplicate texts and subscribers
    decided by two workers. This is the problem the lane removes. (Not part of CI.)
 3. **Scale the workers for BFCM:** stop the four workers and start eight with `--workers 8`. Offsets
-   are stored per partition, so each partition's new owner resumes where the old one stopped. Pass:
+   are stored per partition, so each partition's new owner resumes from the last stored offset, at
+   most a second back. Pass:
    `out of order` and `missing` stay 0 and the workers are back under budget within seconds. Move
    ownership stop-then-start: there is no fencing, so never run two workers that claim one partition.
 
