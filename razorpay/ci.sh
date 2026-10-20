@@ -52,7 +52,7 @@ if surge:
 starts = [l for l in open("checkout.log") if "downtime started" in l]
 for l in starts:
     print("  " + l.strip())
-win = num(r"degraded ([0-9.]+) s", starts)
+win = [float(m.group(1)) for m in (re.search(r"degraded ([0-9.]+) s", l) for l in starts) if m]  # "nan" when the start of the degradation was not seen
 lane = num(r"\(detection window\)  flag to checkout ([0-9.]+) ms", starts)
 late = sum(num(r"offered after the flag ([0-9]+)$", starts))
 resolved = sum(1 for l in open("checkout.log") if "downtime resolved" in l)
