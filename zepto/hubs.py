@@ -20,19 +20,23 @@ from common import DEFAULT_URL, INVENTORY, ORDERS, PRICING, STATUS, STREAM, key,
 
 
 async def main(a):
-    client = IggyClient.from_connection_string(a.url)
-    await client.connect()
+    async def own_client():                 # one connection per writer and reader, so none waits on another
+        c = IggyClient.from_connection_string(a.url)
+        await c.connect()
+        return c
+
+    client = await own_client()             # admin calls (topic checks)
     cfg = DirectProducerConfig(batch_length=500, linger_time=timedelta(microseconds=500))
     durable = dict(topic_partitions_count=a.partitions, mode=cfg)   # new topics default to replicated durability
-    inv_p = await client.producer(STREAM, INVENTORY, **durable)
-    price_p = await client.producer(STREAM, PRICING, **durable)
-    status_p = await client.producer(STREAM, STATUS, topic_partitions_count=8, mode=cfg)
+    inv_p = await (await own_client()).producer(STREAM, INVENTORY, **durable)
+    price_p = await (await own_client()).producer(STREAM, PRICING, **durable)
+    status_p = await (await own_client()).producer(STREAM, STATUS, topic_partitions_count=8, mode=cfg)
     if await client.get_topic(STREAM, ORDERS) is None:      # revalidate.py may not have created it yet
         try:
             await client.create_topic(STREAM, ORDERS, 8)
         except RuntimeError:
             pass                                             # created by revalidate.py in the meantime
-    orders = await client.consumer_group("hubs", STREAM, ORDERS, polling_strategy=PollingStrategy.Next(), batch_length=1000,
+    orders = await (await own_client()).consumer_group("hubs", STREAM, ORDERS, polling_strategy=PollingStrategy.Next(), batch_length=1000,
                                          auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(microseconds=500))
     keys = [key(h, s) for h in range(a.hubs) for s in range(a.skus)]
     part = {k: zlib.crc32(k.encode()) % a.partitions for k in keys}   # one partition per hub:sku, so its changes stay in order

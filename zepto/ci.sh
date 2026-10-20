@@ -19,6 +19,6 @@ steady=$(grep -E '\[revalidate\] +[1-9][0-9,]* changes/s' revalidate.log | tail 
 live=$(grep -c 'PASS (' <<<"$steady" || true)
 fail=$(grep -c 'FAIL (' <<<"$steady" || true)
 echo "steady-state seconds with live traffic: PASS $live, FAIL $fail"
-[ "$live" -ge 30 ] && [ $(( fail * 100 )) -le $(( (live + fail) * 5 )) ]
+if ! { [ "$live" -ge 30 ] && [ $(( fail * 100 )) -le $(( (live + fail) * 5 )) ]; }; then echo "latency check failed"; exit 1; fi
 grep -Eq "orders accepted [1-9]" hubs.log
 echo "Kit OK on Apache Iggy 0.9.0"

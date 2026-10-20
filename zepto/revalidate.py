@@ -30,11 +30,19 @@ async def main(a):
     while not all([await client.get_topic(STREAM, t) for t in (INVENTORY, PRICING)]):
         print(f"[{a.name}] waiting for hubs.py to create the topics…", flush=True)
         await asyncio.sleep(1)
-    group = lambda topic: client.consumer_group(f"{a.name}-{topic}-{os.getpid()}", STREAM, topic,
-                                                polling_strategy=PollingStrategy.First(), batch_length=5000,
-                                                auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+
+    async def own_client():                 # one connection per reader and writer, so none waits on another
+        c = IggyClient.from_connection_string(a.url)
+        await c.connect()
+        return c
+
+    async def group(topic):
+        return await (await own_client()).consumer_group(
+            f"{a.name}-{topic}-{os.getpid()}", STREAM, topic, polling_strategy=PollingStrategy.First(), batch_length=5000,
+            auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+
     inv, prices = await group(INVENTORY), await group(PRICING)
-    orders = await client.producer(STREAM, ORDERS, topic_partitions_count=8)
+    orders = await (await own_client()).producer(STREAM, ORDERS, topic_partitions_count=8)
     seq, live, price, index = {}, defaultdict(set), {}, {}
     lat, stats = Window(), defaultdict(int)
     caught_up = [False]                     # a new reader first replays changes made before it joined
