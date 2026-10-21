@@ -9,7 +9,7 @@ STREAM = "bidding"
 SPEND = "spend"                 # the lane: each bid server's running spend per ad group, keyed by ad group
 PACING = "pacing-decisions"     # the controllers' decisions back to every bid server: open, throttle or pause
 FEEDBACK = "bid-feedback"       # a heavy, latency-tolerant bid-feedback log on the same broker
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: small writes go out at once
 PARTITIONS = {SPEND: 16, PACING: 1, FEEDBACK: 32}
 
 

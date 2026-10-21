@@ -1,8 +1,11 @@
 """The pacing controllers, fed by the spend lane.
 
-Reads the spend topic on its own connection and consumer group. Each record is one bid server's running
-spend for one ad group in the current flight (the resulting total, with a sequence), so the ad group's
-spend is the sum of the latest totals from every bid server, and replays or repeats change nothing.
+Reads every partition of the spend topic directly, on --readers connections of its own, from the start of the
+log, tracking its own position (no consumer group: a group reader visits one partition per poll, so with 16
+partitions a record waited for its partition's turn and a busy host pushed the tail past the budget). Each
+record is one bid server's running spend for one ad group in the current flight (the resulting total, with a
+sequence), so the ad group's spend is the sum of the latest totals from every bid server, and replays or
+repeats change nothing.
 
 For every ad group it decides, as spend arrives:
   * PAUSE the moment spend reaches the flight budget;
@@ -20,9 +23,8 @@ import gc
 import os
 import time
 from collections import defaultdict
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy, SendMessage
+from apache_iggy import Consumer, IggyClient, PollingStrategy, SendMessage
 
 from common import (DEFAULT_URL, PACING, PARTITIONS, SPEND, STREAM, Window, ad_group, budget, ensure_topics,
                     flight, load, msg)
@@ -34,10 +36,9 @@ async def main(a):
         await c.connect()
         return c
 
-    await ensure_topics(await own_client(), SPEND, PACING)
-    spend = await (await own_client()).consumer_group(
-        f"{a.name}-{SPEND}-{os.getpid()}", STREAM, SPEND, polling_strategy=PollingStrategy.First(),
-        batch_length=5000, auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+    admin = await own_client()
+    await ensure_topics(admin, SPEND, PACING)
+    parts = list(range((await admin.get_topic(STREAM, SPEND)).partitions_count))
     out = await (await own_client()).producer(STREAM, PACING, topic_partitions_count=PARTITIONS[PACING])
     groups = [ad_group(i) for i in range(a.ad_groups)]
     budgets = {g: budget(g, a.wins_per_s, a.ad_groups, a.flight_s) for g in groups}
@@ -62,9 +63,8 @@ async def main(a):
         if new == "pause":
             paused_n[f] += 1
 
-    async def on_spend(m):
+    def on_spend(m, now):
         s = load(m.payload())
-        now = time.time_ns()
         age = (now - s["ns"]) / 1e6
         if caught_up[0]:
             lat.add(age)
@@ -94,6 +94,28 @@ async def main(a):
                 decide(f, g, "throttle")
             elif ahead < 1 and state.get((f, g)) == "throttle":
                 decide(f, g, "open")
+
+    async def read(pids):
+        # Each partition in turn, from the start of the log (the totals are rebuilt from it), then from our own
+        # position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        c = await own_client()
+        who = {p: Consumer.Single(f"{a.name}-{os.getpid()}-p{p}") for p in pids}
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, SPEND, consumer=who[p], partition_id=p, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    now = time.time_ns()
+                    for m in ms:
+                        on_spend(m, now)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
 
     async def send_decisions():
         # Decisions are small and come in bursts; one batch every 2 ms keeps them off a send-per-decision loop.
@@ -136,7 +158,7 @@ async def main(a):
             for k in [k for k in last if k[0] <= old]:
                 del last[k]
 
-    await asyncio.gather(spend.consume_messages(on_spend, asyncio.Event()), send_decisions(), report())
+    await asyncio.gather(send_decisions(), report(), *(read(parts[r::a.readers]) for r in range(a.readers)))
 
 
 if __name__ == "__main__":
@@ -147,5 +169,8 @@ if __name__ == "__main__":
     p.add_argument("--ad-groups", type=int, default=5_000, help="must match bidders.py")
     p.add_argument("--wins-per-s", type=float, default=10_000, help="must match bidders.py (sets the budgets)")
     p.add_argument("--flight-s", type=float, default=60, help="seconds per compressed flight; must match bidders.py")
+    p.add_argument("--readers", type=int, default=2, help="connections reading the spend partitions")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--ahead", type=float, default=0.25, help="throttle when spend runs this far ahead of an even pace")
     asyncio.run(main(p.parse_args()))
