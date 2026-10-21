@@ -57,12 +57,14 @@ They print a line a second:
 the moment `limits.py` has applied it, and each decision from `limits.py` to every API server, through
 Python clients, on whatever machine you run it on. On a shared 2-vCPU CI runner with the broker and all
 scripts on one box, at reduced scale (3,000 billable requests/s, 2,000 users, 4 API servers, 20 s
-periods), it held usage-to-limit-check p50 11 ms and p99 22 ms (62 of 62 steady-state seconds inside
-50 ms), and decision-to-API-servers p50 3 ms and p99 6 ms. With 2 MB/s of Tab events on the same broker,
-the lane's p99 stayed at 22 ms. Up to 1,251 of 2,000 users reached their limit and were stopped in a
-period, and usage served past the limit was 0.04–0.06% of paid usage. That is the end-to-end loop through
+periods), five green runs held usage-to-limit-check p50 2.9–7.3 ms and p99 5.7–13.8 ms (every steady-state
+second inside 50 ms, 61–62 per run), and decision-to-API-servers p50 2.6–3.0 ms and p99 4.7–5.9 ms. The
+limit check reads the 16 usage partitions directly, on two connections; an earlier version read them through
+a consumer group, which visits one partition per poll, and sat at p50 11 ms and p99 22 ms. With 2 MB/s of Tab
+events on the same broker, the lane's p99 moved by less than 0.5 ms. Up to 1,228–1,254 of 2,000 users reached
+their limit and were stopped in a period, and usage served past the limit was 0.02–0.08% of paid usage. That is the end-to-end loop through
 this demo code, not the broker alone. The broker's own tail latency is measured with `iggy-bench` in
-`bench/PLAN.md`, on dedicated machines.
+`bench/PLAN.md`, on dedicated machines. CI runs: https://github.com/psinglap/laserdata-kits/actions/runs/39680690348, https://github.com/psinglap/laserdata-kits/actions/runs/39680708293, https://github.com/psinglap/laserdata-kits/actions/runs/39680730121
 
 | File | What it is |
 |---|---|

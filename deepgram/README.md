@@ -54,12 +54,15 @@ They print a line a second:
 `meter.py` has added it to the summary, through Python clients, on whatever machine you run it on. On a shared
 2-vCPU CI runner with the broker and all scripts on one box, at reduced scale (3,000 live streams over 500
 projects on 4 servers, about 3,080 usage messages/s, 20 s mean stream length, 1% of messages sent twice), it held
-usage-to-summary p50 11 ms, p99 22 ms and p99.9 24 ms (62 of 62 steady-state seconds inside 50 ms). With 2 MB/s
-of request logs on the same broker, the lane's p99 went from 21.6 ms to 22.0 ms. All 10,475 streams that closed
-reconciled to the millisecond; 2,129 retries were absorbed, where a meter that adds every message would have
-billed 2,128 extra seconds of audio (0.96% of the audio served). That is the end-to-end lane through this demo
+five green runs held usage-to-summary p50 4.0–7.0 ms, p99 7.2–13.7 ms and p99.9 8.9–16.8 ms (62 of 62
+steady-state seconds inside 50 ms in each). The meter reads the 16 usage partitions directly, on two connections;
+an earlier version read them through a consumer group, which visits one partition per poll, and sat at p50 11 ms
+and p99 22 ms. With 2 MB/s of request logs on the same broker, the lane's p99 moved by less than 0.5 ms. In every
+run all 10,339–10,589 streams that closed reconciled to the millisecond; 2,122–2,239 retries were absorbed, where
+a meter that adds every message would have billed that many extra seconds of audio (0.96–1.01% of the audio
+served). That is the end-to-end lane through this demo
 code, not the broker alone. The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on
-dedicated machines. CI run: https://github.com/psinglap/laserdata-kits/actions/runs/39475217895
+dedicated machines. CI runs: https://github.com/psinglap/laserdata-kits/actions/runs/39680690278, https://github.com/psinglap/laserdata-kits/actions/runs/39680690348, https://github.com/psinglap/laserdata-kits/actions/runs/39680730121
 
 | File | What it is |
 |---|---|
