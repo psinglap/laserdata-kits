@@ -6,6 +6,7 @@ missed fills replayed in order. It runs beside Kafka and Aeron, so nothing else 
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs. Apache Iggy is written in Rust, like Kraken's core services.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.kraken-kit
 - **One slide:** [`LaserData_Kraken_ExecutionReports.pdf`](LaserData_Kraken_ExecutionReports.pdf)
 
 ## Why this use case
