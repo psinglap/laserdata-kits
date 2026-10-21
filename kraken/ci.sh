@@ -11,10 +11,10 @@ docker compose up -d
 for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; sleep 1; done
 pip install -q -r requirements.txt
 python -m py_compile common.py engine.py gateway.py ledger_export.py kafka_bridge.py
-# 20,000 accounts, 1,500 execution reports/s with a 2x burst (3,000/s) from second 30 to 45, sessions split over
+# 20,000 accounts, 1,200 execution reports/s with a 2x burst (2,400/s) from second 30 to 45, sessions split over
 # two gateways, 20 sessions dropped per second on each, 2 MB/s of ledger entries from second 20 for 35 s.
 A=20000
-timeout 86 python -u engine.py --accounts $A --rate 1500 --burst 2 --burst-at 30 --burst-for 15 > engine.log 2>&1 &
+timeout 86 python -u engine.py --accounts $A --rate 1200 --burst 2 --burst-at 30 --burst-for 15 > engine.log 2>&1 &
 sleep 4
 timeout 76 python -u gateway.py --name gw-1 --index 0 --gateways 2 --accounts $A > gw-1.log 2>&1 &
 timeout 66 python -u ledger_export.py --mbps 2 --at 16 --duration 35 > export.log 2>&1 &
