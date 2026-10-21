@@ -121,11 +121,14 @@ async def main(a):
         while True:
             more = False
             for p in [p for p in list(on_part) if p % a.readers == r_i]:
+                if p not in on_part:
+                    continue                # its last viewer left while this round was polling
                 if p not in who:
                     who[p] = Consumer.Single(f"{a.name}-{os.getpid()}-p{p}")
-                strategy = PollingStrategy.Offset(pos[p]) if p in pos else PollingStrategy.Timestamp(start_us[p])
-                ms = await c.poll_messages(STREAM, LANE, consumer=who[p], partition_id=p, count=a.batch,
-                                           auto_commit=False, polling_strategy=strategy)
+                strategy = (PollingStrategy.Offset(pos[p]) if p in pos
+                            else PollingStrategy.Timestamp(start_us[p]))      # a new one: from the open
+                ms = await c.poll_messages(STREAM, LANE, consumer=who[p], partition_id=p,
+                                           count=a.batch, auto_commit=False, polling_strategy=strategy)
                 if ms and p in on_part:
                     pos[p] = ms[-1].offset() + 1
                     for m in ms:
