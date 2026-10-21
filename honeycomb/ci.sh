@@ -53,7 +53,7 @@ g = [l for l in open("ingest.log") if l.startswith("[ingest]")]
 tot = lambda pat: int(sum(nums(pat, g)))
 silences, right = tot(r"silences started ([0-9,]+)"), tot(r"fired right ([0-9,]+)")
 missed, spurious = tot(r"missed ([0-9,]+)"), tot(r"spurious pages ([0-9,]+)")
-held, X
+held, held_wrong = tot(r"Retriever behind ([0-9,]+) \(wrong"), tot(r"\(wrong ([0-9,]+)\)")
 late = nums(r"max \+([0-9.]+)s\)", [l for l in g if not re.search(r"fired right 0 ", l)])
 print("heartbeats: silences started %d  fired right %d  fired after the window: max +%.2f s  missed %d  "
       "spurious pages %d  held while Retriever behind %d (wrong %d)" % (
