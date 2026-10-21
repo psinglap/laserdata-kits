@@ -67,7 +67,7 @@ Retriever was behind? Those are the business numbers; a slow lane shows up as sp
 
 | File | What it is |
 |---|---|
-| `ingest.py` | Datasets sending batches; a receipt per enqueued batch to `ingest-receipts`, keyed by dataset, with the Kafka partition and offset; Retriever progress per partition to `query-progress`; quiet customers and a Retriever stall on purpose. Checks every verdict against the truth. |
+| `ingest.py` | Datasets sending batches; a receipt per enqueued batch, keyed by dataset, with the Kafka partition and offset, and Retriever progress per partition, both on `freshness-lane`; quiet customers and a Retriever stall on purpose. Checks every verdict against the truth. |
 | `freshness.py` | The freshness service: last enqueued and newest queryable time per dataset, rebuilt from the lane on start; answers each heartbeat with fire, hold or ok and publishes changes to `heartbeat-verdicts`. |
 | `backfill_flood.py` | A neighbour on the same broker: event batches replayed after a cutover (16 KB records) on `backfill-events`. |
 | `kafka_bridge.py` | Writes receipts from your events topic as a read-only consumer group, and progress from other consumer groups' committed offsets. |
@@ -95,7 +95,7 @@ python kafka_bridge.py --bootstrap <brokers> --kafka-topic <events-topic> \
 The bridge only reads, as its own consumer group `iggy-shadow`; the ingest service, Retriever and every
 consumer group are untouched. `--progress-group` reads another group's committed offsets without joining it.
 Retriever keeps its own offsets, so its progress needs a few lines in Retriever that send
-`{kp, node, off}` to `query-progress`. Map your record in `to_dataset()`. Run it inside your AWS account,
+`{kp, node, off}` to `freshness-lane`. Map your record in `to_dataset()`. Run it inside your AWS account,
 next to your brokers.
 
 ## Next step

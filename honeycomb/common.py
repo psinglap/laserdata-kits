@@ -11,14 +11,13 @@ from datetime import timedelta
 from apache_iggy import IggyExpiry
 
 STREAM = "ingest-freshness"
-RECEIPTS = "ingest-receipts"      # the lane: one receipt per enqueued batch, keyed by dataset
-PROGRESS = "query-progress"       # the lane: each Retriever node's applied offset, keyed by Kafka partition
+LANE = "freshness-lane"          # the lane: a receipt per enqueued batch (keyed by dataset) and each Retriever
+                                  # node's applied offset per Kafka partition (keyed by that partition)
 VERDICTS = "heartbeat-verdicts"   # the freshness service's verdict changes (read by the truth check)
 BACKFILL = "backfill-events"      # raw event batches replayed after a cutover: big, read by nobody here (the neighbour)
 DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: small writes go out at once
-PARTITIONS = {RECEIPTS: 16, PROGRESS: 4, VERDICTS: 1, BACKFILL: 16}
-RETENTION = {RECEIPTS: IggyExpiry.ExpireDuration(timedelta(minutes=15)),   # enough to rebuild every dataset's state
-             PROGRESS: IggyExpiry.ExpireDuration(timedelta(minutes=15)),
+PARTITIONS = {LANE: 16, VERDICTS: 1, BACKFILL: 16}
+RETENTION = {LANE: IggyExpiry.ExpireDuration(timedelta(minutes=15)),   # enough to rebuild every dataset's state
              VERDICTS: IggyExpiry.ExpireDuration(timedelta(hours=1)),
              BACKFILL: IggyExpiry.ExpireDuration(timedelta(hours=1))}
 KAFKA_PARTITIONS = 100            # "~100 partitions" on the main events topic (Honeycomb, SREcon Americas 2023)
@@ -27,6 +26,10 @@ KAFKA_PARTITIONS = 100            # "~100 partitions" on the main events topic (
 def dataset(i: int) -> str:
     # An illustrative team/environment/dataset path; yours come from the ingest service.
     return f"team-{i // 12:05d}/{('production', 'staging', 'dev')[i % 3]}/svc-{i % 12:02d}"
+
+
+def progress_key(kp: int) -> str:
+    return f"kafka-partition-{kp}"   # progress for one Kafka partition stays in order on one lane partition
 
 
 def part(key: str, partitions: int) -> int:

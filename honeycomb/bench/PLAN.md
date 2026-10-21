@@ -10,8 +10,8 @@ Rules are fixed before any result exists. If Kafka wins a step, that row is publ
 |---|---|---|
 | Message size | ~150 B per receipt or progress report · ~16 KB per backfill record next door | Dataset, sequence, Kafka partition and offset, event count, timestamp. The backfill record stands in for an event batch. |
 | Rate | 40K → 200K receipts/s (one per dataset per batch or per 100 ms), plus 100 partitions × 2 Retriever nodes × 2 progress reports/s | Your ingest runs ~100 Kafka partitions at up to 50K msgs/s each (SREcon23); the lane carries one receipt per batch, not the events. Dataset count is illustrative until you share yours. |
-| Partitions | 32 on the receipts topic, keyed by dataset · 4 on progress, keyed by Kafka partition | A dataset's receipts are applied in order; the freshness service scales by partition. |
-| Readers | 1 → 4 freshness workers, one consumer group per topic | Each worker owns its datasets' partitions; offsets stored once a second. |
+| Partitions | 32 on the lane: receipts keyed by dataset, progress keyed by Kafka partition | A dataset's receipts and a partition's progress are applied in order; the freshness service scales by partition. |
+| Readers | 1 → 4 freshness workers, one consumer group | Each worker owns its datasets' partitions; offsets stored once a second. |
 | Durability | Iggy `replicated` × 3 · Kafka `acks=all`, RF 3 | A lost receipt is a missed heartbeat answer. |
 | Kafka tuning | `linger.ms=0`, tuned fetch settings, same region and instance family (Graviton) | Kafka on its best latency settings, on its own small cluster, not the main events cluster. |
 | Peak | 2× receipts for 10 min | A large customer onboarding or a traffic spike on a few partitions. |

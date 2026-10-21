@@ -1,7 +1,7 @@
 """The freshness service heartbeat triggers ask before they page, fed by the ingest freshness lane.
 
-Reads ingest-receipts and query-progress, each on its own connection and consumer group, and keeps for every
-dataset two times: when the ingest service last enqueued a batch for it, and the newest of its batches that
+Reads the freshness lane (receipts and Retriever progress) on its own connection and consumer group, and keeps
+for every dataset two times: when the ingest service last enqueued a batch for it, and the newest of its batches that
 Retriever has applied on every Kafka partition it went to (so it is queryable). Every --eval-every seconds,
 it answers each dataset's heartbeat:
 
@@ -28,8 +28,7 @@ from datetime import timedelta
 
 from apache_iggy import AutoCommit, IggyClient, PollingStrategy, SendMessage
 
-from common import (DEFAULT_URL, PARTITIONS, PROGRESS, RECEIPTS, STREAM, VERDICTS, Stalls, Window, ensure_topics,
-                    load, msg)
+from common import DEFAULT_URL, LANE, PARTITIONS, STREAM, VERDICTS, Stalls, Window, ensure_topics, load, msg
 
 SLICES = 10    # each evaluation pass is spread over 10 slices, so no single step holds the read loop
 
@@ -40,15 +39,12 @@ async def main(a):
         await c.connect()
         return c
 
-    await ensure_topics(await own_client(), RECEIPTS, PROGRESS, VERDICTS)
+    await ensure_topics(await own_client(), LANE, VERDICTS)
 
-    async def reader(topic):
-        return await (await own_client()).consumer_group(
-            f"{a.name}-{topic}-{os.getpid()}", STREAM, topic, polling_strategy=PollingStrategy.First(),  # rebuild
-            batch_length=5000, auto_commit=AutoCommit.Interval(timedelta(seconds=1)),   # offsets once a second
-            poll_interval=timedelta(microseconds=500))
-
-    receipts, progress = await reader(RECEIPTS), await reader(PROGRESS)
+    lane = await (await own_client()).consumer_group(
+        f"{a.name}-{os.getpid()}", STREAM, LANE, polling_strategy=PollingStrategy.First(),   # rebuild from the log
+        batch_length=5000, auto_commit=AutoCommit.Interval(timedelta(seconds=1)),          # offsets once a second
+        poll_interval=timedelta(microseconds=500))
     out = await (await own_client()).producer(STREAM, VERDICTS, topic_partitions_count=PARTITIONS[VERDICTS])
 
     last_seq, last_rx, queryable = {}, {}, {}   # dataset -> receipt sequence, last enqueued (ns), newest queryable (ns)
@@ -69,9 +65,14 @@ async def main(a):
             stats["replayed"] += 1
             stats["max_age"] = max(stats["max_age"], age)
 
-    async def on_receipt(m):
+    async def on_message(m):
         d = load(m.payload())
         timed(d)
+        if "ds" not in d:                       # Retriever progress for one Kafka partition
+            stats["progress"] += 1
+            if d["off"] > applied[d["kp"]]:
+                applied[d["kp"]] = d["off"]
+            return
         k = d["ds"]
         if k not in last_seq:
             order.append(k)
@@ -87,20 +88,14 @@ async def main(a):
         else:
             pending.setdefault(k, {}).setdefault(d["kp"], deque()).append((d["off"], d["ns"]))
 
-    async def on_progress(m):
-        d = load(m.payload())
-        timed(d)
-        stats["progress"] += 1
-        if d["off"] > applied[d["kp"]]:
-            applied[d["kp"]] = d["off"]
-
     def evaluate(keys, now):
         for k in keys:
             for kp, q in pending.get(k, {}).items():
                 top = applied[kp]
                 while q and q[0][0] <= top:     # Retriever has applied this batch: it is queryable
                     queryable[k] = max(queryable[k], q.popleft()[1])
-            waiting = [q[0][1] for q in pending.get(k, {}).values() if q]
+            # the oldest batch inside the window that is still waiting for Retriever, per Kafka partition
+            waiting = [next((ns for _, ns in q if now - ns <= w_ns), now) for q in pending.get(k, {}).values() if q]
             if now - last_rx[k] > w_ns:
                 v = "fire"                      # nothing enqueued inside the window
             elif now - queryable[k] > w_ns and waiting and now - min(waiting) > behind_ns:
@@ -157,8 +152,7 @@ async def main(a):
                   f"{stalls.read()}", flush=True)
             stats.clear()
 
-    await asyncio.gather(receipts.consume_messages(on_receipt, asyncio.Event()),
-                         progress.consume_messages(on_progress, asyncio.Event()),
+    await asyncio.gather(lane.consume_messages(on_message, asyncio.Event()),
                          heartbeats(), sender(), report_line(), stalls.watch())
 
 

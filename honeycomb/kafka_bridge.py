@@ -7,7 +7,7 @@ had records, keyed by dataset, with the newest partition and offset seen. freshn
 real traffic.
 
 Progress: Retriever keeps its own offsets, so its progress has to come from Retriever (a few lines that
-send {kp, node, off} to query-progress every half second). Consumers that use Kafka consumer groups, such
+send {kp, node, off} to the lane every half second). Consumers that use Kafka consumer groups, such
 as SLO processing, can be shadowed from here: pass --progress-group <group> and the bridge reads that
 group's committed offsets every --progress-ms and writes them as progress. It only reads them; it never
 joins the group.
@@ -29,7 +29,7 @@ from collections import defaultdict
 from apache_iggy import IggyClient, Partitioning, SendMessage
 from confluent_kafka import Consumer, TopicPartition
 
-from common import DEFAULT_URL, PARTITIONS, PROGRESS, RECEIPTS, STREAM, ensure_topics, msg, part
+from common import DEFAULT_URL, LANE, PARTITIONS, STREAM, ensure_topics, msg, part, progress_key
 
 
 def to_dataset(rec):
@@ -43,11 +43,8 @@ def to_dataset(rec):
 async def main(a):
     iggy = IggyClient.from_connection_string(a.url)
     await iggy.connect()
-    await ensure_topics(iggy, RECEIPTS, PROGRESS)
-    rx = await iggy.producer(STREAM, RECEIPTS, topic_partitions_count=PARTITIONS[RECEIPTS])
-    pg_client = IggyClient.from_connection_string(a.url)      # one connection per producer
-    await pg_client.connect()
-    pg = await pg_client.producer(STREAM, PROGRESS, topic_partitions_count=PARTITIONS[PROGRESS])
+    await ensure_topics(iggy, LANE)
+    lane = await iggy.producer(STREAM, LANE, topic_partitions_count=PARTITIONS[LANE])
     conf = {"bootstrap.servers": a.bootstrap, "group.id": "iggy-shadow", "auto.offset.reset": "latest",
             "enable.auto.commit": True, "auto.commit.interval.ms": 1000}   # offsets once a second
     conf.update(kv.split("=", 1) for kv in a.X)
@@ -67,7 +64,7 @@ async def main(a):
     newest = {}                            # dataset -> (kafka partition, offset, record ns) since the last flush
     forwarded, t0 = 0, time.monotonic()
     next_flush = next_progress = time.monotonic()
-    async with rx, pg:
+    async with lane:
         while True:
             for rec in kafka.consume(num_messages=5000, timeout=0.005):
                 if rec.error():
@@ -83,11 +80,11 @@ async def main(a):
                 batches = defaultdict(list)
                 for ds, (kp, off, ns) in newest.items():
                     seq[ds] += 1
-                    batches[part(ds, PARTITIONS[RECEIPTS])].append(
+                    batches[part(ds, PARTITIONS[LANE])].append(
                         SendMessage(msg(ds=ds, seq=seq[ds], kp=kp, off=off, ns=ns)))
                 newest.clear()
                 # One batch per partition, all sent at once; a dataset's receipts keep their order.
-                await asyncio.gather(*(rx.send_with_partitioning(ms, Partitioning.partition_id(pid))
+                await asyncio.gather(*(lane.send_with_partitioning(ms, Partitioning.partition_id(pid))
                                        for pid, ms in batches.items()))
                 forwarded += sum(len(ms) for ms in batches.values())
             if watchers and now >= next_progress:
@@ -96,9 +93,9 @@ async def main(a):
                 for node, (g, wc) in enumerate(watchers):
                     for tp in wc.committed(tps, timeout=5):
                         if tp.offset >= 0:   # committed offset = next to read, so offset - 1 is applied
-                            batches[part(str(tp.partition), PARTITIONS[PROGRESS])].append(
+                            batches[part(progress_key(tp.partition), PARTITIONS[LANE])].append(
                                 SendMessage(msg(kp=tp.partition, node=node, group=g, off=tp.offset - 1)))
-                await asyncio.gather(*(pg.send_with_partitioning(ms, Partitioning.partition_id(pid))
+                await asyncio.gather(*(lane.send_with_partitioning(ms, Partitioning.partition_id(pid))
                                        for pid, ms in batches.items()))
             if now - t0 >= 1:
                 print(f"[bridge] {forwarded:,} receipts/s forwarded from '{a.kafka_topic}'", flush=True)

@@ -29,8 +29,8 @@ from datetime import timedelta
 
 from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
-from common import (DEFAULT_URL, KAFKA_PARTITIONS, PARTITIONS, PROGRESS, RECEIPTS, STREAM, VERDICTS, Stalls,
-                    Window, dataset, ensure_topics, load, msg, part)
+from common import (DEFAULT_URL, KAFKA_PARTITIONS, LANE, PARTITIONS, STREAM, VERDICTS, Stalls, Window, dataset,
+                    ensure_topics, load, msg, part, progress_key)
 
 TICK = 0.02   # seconds; each dataset still sends on its own schedule, stamped when enqueued
 
@@ -41,12 +41,9 @@ async def main(a):
         await c.connect()
         return c
 
-    await ensure_topics(await own_client(), RECEIPTS, PROGRESS, VERDICTS)
+    await ensure_topics(await own_client(), LANE, VERDICTS)
     cfg = DirectProducerConfig(batch_length=5000, linger_time=timedelta(microseconds=500))
-    rx_out = await (await own_client()).producer(STREAM, RECEIPTS, topic_partitions_count=PARTITIONS[RECEIPTS],
-                                                 mode=cfg)
-    pg_out = await (await own_client()).producer(STREAM, PROGRESS, topic_partitions_count=PARTITIONS[PROGRESS],
-                                                 mode=cfg)
+    out = await (await own_client()).producer(STREAM, LANE, topic_partitions_count=PARTITIONS[LANE], mode=cfg)
     verdicts = await (await own_client()).consumer_group(
         "ingest-truth-check", STREAM, VERDICTS, polling_strategy=PollingStrategy.Next(), batch_length=5000,
         auto_commit=AutoCommit.Interval(timedelta(seconds=1)),     # offsets stored once a second, not per poll
@@ -63,7 +60,7 @@ async def main(a):
         first = t.randrange(kp_n)
         kps.append((first, (first + 1 + t.randrange(kp_n - 1)) % kp_n))
     seq = [0] * a.datasets
-    sent = [deque(maxlen=int(a.heartbeat_s / a.every) + 8) for _ in range(a.datasets)]   # enqueue times, ns
+    sent = [deque(maxlen=int(a.heartbeat_s / a.every) + 8) for _ in range(a.datasets)]   # (enqueued ns, Kafka part.)
     quiet_until = [0.0] * a.datasets
     kp_off = [0] * kp_n                     # newest offset written per Kafka partition
     applied = [0] * kp_n                    # what Retriever has applied per Kafka partition
@@ -78,16 +75,16 @@ async def main(a):
     stats, delays, stalls = defaultdict(int), Window(), Stalls()
     gc.freeze()                             # keep the datasets out of the collector's way
 
-    async def send_by_partition(producer, topic, items):
+    async def send_by_partition(items):
         # One batch per partition, all sent at once: per-key order kept, about one round trip per tick.
         batches = defaultdict(list)
         for key, m in items:
-            batches[part(key, PARTITIONS[topic])].append(m)
-        await asyncio.gather(*(producer.send_with_partitioning(ms, Partitioning.partition_id(pid))
+            batches[part(key, PARTITIONS[LANE])].append(m)
+        await asyncio.gather(*(out.send_with_partitioning(ms, Partitioning.partition_id(pid))
                                for pid, ms in batches.items()))
 
     async def run():
-        async with rx_out, pg_out:
+        async with out:
             t0 = due = next_progress = next_second = time.monotonic()
             tick = 0
             while True:
@@ -106,7 +103,7 @@ async def main(a):
                         i = r.randrange(a.datasets)
                         if quiet_until[i] + 2 * a.every < now and sent[i]:   # sending again for a while
                             quiet_until[i] = now + a.silence_for
-                            spells[i] = [sent[i][-1], False]
+                            spells[i] = [sent[i][-1][0], False]
                             stats["silences"] += 1
                 items = []
                 for i in ring[tick % slots]:
@@ -115,28 +112,30 @@ async def main(a):
                     seq[i] += 1
                     kp = kps[i][seq[i] % 2]
                     kp_off[kp] += 1
-                    sent[i].append(now_ns)
+                    sent[i].append((now_ns, kp))
                     items.append((names[i], SendMessage(msg(ds=names[i], seq=seq[i], kp=kp, off=kp_off[kp],
                                                             n=r.randint(20, 400), ns=now_ns))))
                 stats["receipts"] += len(items)
-                sends = [send_by_partition(rx_out, RECEIPTS, items)]
                 if now >= next_progress:
                     next_progress += a.progress_every
-                    prog = []
                     for kp in range(kp_n):
                         if kp not in stalled:
                             applied[kp] = kp_off[kp]
                         for node in range(a.nodes):
-                            prog.append((str(kp), SendMessage(msg(kp=kp, node=node, off=applied[kp], ns=now_ns))))
-                    sends.append(send_by_partition(pg_out, PROGRESS, prog))
-                await asyncio.gather(*sends)
+                            items.append((progress_key(kp), SendMessage(msg(kp=kp, node=node, off=applied[kp],
+                                                                            ns=now_ns))))
+                await send_by_partition(items)
                 tick += 1
                 due += TICK
                 await asyncio.sleep(max(0.0, due - time.monotonic()))
 
-    def stalled_at(i, t_ns):
-        # Were all of this dataset's Kafka partitions behind on Retriever at t (2 s grace after the stall)?
-        return stall[0] and stall[0] <= t_ns <= stall[1] + 2_000_000_000 and all(k in stalled_set for k in kps[i])
+    def behind_at(i, t_ns):
+        # Truth for a hold: inside the window, every batch this dataset sent more than a second before t went to
+        # a Kafka partition Retriever had stopped applying (2 s grace after the stall), so none of it is queryable.
+        if not (stall[0] and stall[0] <= t_ns <= stall[1] + 2_000_000_000):
+            return False
+        window = [kp for s, kp in sent[i] if t_ns - w_ns < s <= t_ns - 1_000_000_000]
+        return bool(window) and all(kp in stalled_set for kp in window)
 
     async def on_verdict(m):
         d = load(m.payload())
@@ -145,7 +144,7 @@ async def main(a):
             stats["resumed"] += d.get("v") == "ok"
             return
         t_v = d["ns"]
-        prior = [s for s in sent[i] if s <= t_v]
+        prior = [s for s, _ in sent[i] if s <= t_v]
         if not prior:
             return                          # older than the check's memory: not judged
         gap = t_v - prior[-1]
@@ -158,7 +157,7 @@ async def main(a):
             else:
                 stats["spurious"] += 1      # paged an owner whose dataset had sent inside the window
         elif d["v"] == "hold":
-            if gap < w_ns and stalled_at(i, t_v):
+            if gap < w_ns and behind_at(i, t_v):
                 stats["held_right"] += 1    # a page a query-only heartbeat would have sent, and nobody got
             else:
                 stats["held_wrong"] += 1
