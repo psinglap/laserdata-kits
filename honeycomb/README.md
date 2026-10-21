@@ -63,7 +63,18 @@ checks every verdict: was a fired heartbeat a real silence, was any silence miss
 owner whose dataset was still sending, and was every held heartbeat a dataset that was sending while
 Retriever was behind? Those are the business numbers; a slow lane shows up as spurious pages.
 
-%%NUMBERS%%
+**What the numbers mean.** The kit times each receipt and progress report from the moment `ingest.py`
+creates it to the moment `freshness.py` has applied it, through Python clients, on whatever machine you run
+it on. On a shared 2-vCPU CI runner with the broker and all scripts on one box, at 3,370 messages/s (3,000
+datasets sending a batch a second, plus progress from two Retriever nodes on 100 Kafka partitions), a green
+run held p50 5.2 ms, p99 9.9 ms and p99.9 10.9 ms (median of 64 steady-state seconds), with no second over
+the 50 ms budget. 3 MB/s of backfill on the topic next door moved p99 from 9.7 ms to 10.1 ms. With a 10 s
+heartbeat window, 2 datasets a second going quiet and Retriever behind on 30 of 100 Kafka partitions for
+20 s: 124 silences fired, at most 0.61 s after the window closed; none was missed; no heartbeat paged a
+dataset that was sending; and 269 heartbeats of datasets that were sending while Retriever was behind were
+held (up to 264 at once), none of them wrongly. That is the end-to-end lane through this demo code, not the
+broker alone. The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated
+machines.
 
 | File | What it is |
 |---|---|
