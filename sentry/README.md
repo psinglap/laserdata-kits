@@ -59,7 +59,20 @@ Tick lag is how long after the minute boundary the clock ticked: the delay of th
 clock pulse. `missed: right` counts runs that really never checked in; `false` counts a run that did check
 in (or a job that finished) marked anyway, which is a false alert to a customer.
 
-%%NUMBERS%%
+**What the numbers mean.** The kit times each check-in from the moment `crons.py` sends it to the moment
+`monitors.py` has applied it, through Python clients, on whatever machine you run it on. Tick lag is how long
+after the minute boundary the clock ticked. On a shared 2-vCPU CI runner with the broker and all scripts on one
+box, with a minute compressed to 5 s, 6,000 monitors running every 1, 2 or 5 minutes (about 900 to 950
+check-ins/s on average, near 4,000/s in the burst at the start of each minute), 3% of runs never checking in
+and 2% hanging, two green runs held check-in-to-monitor p50 2.9 to 3.4 ms, p99 5.7 to 6.3 ms and p99.9 6.7 to
+7.1 ms (median of 63 to 64 steady-state seconds each), with no second over the 50 ms budget, while 3 MB/s of
+error events ran on the topic next door. Of 14 ticks per run, those not held by the stuck partition fired a
+median of 20 ms after the minute boundary (at most 26 to 32 ms). With partition 3 unread for 8 s, the clock
+held one or two ticks (up to 4.1 to 7.5 s late), then ticked them in order. Each run marked 1,371 to 1,373 runs
+missed and 689 to 733 jobs timed out, every one a run that really never checked in or a job that really hung;
+no run that checked in was marked missed, no finished job timed out, and none was left unmarked. That is the
+end-to-end lane through this demo code, not the broker alone. The broker's own tail latency is measured with
+`iggy-bench` in `bench/PLAN.md`, on dedicated machines.
 
 | File | What it is |
 |---|---|
