@@ -18,12 +18,13 @@ import asyncio
 import gc
 import heapq
 import itertools
+import os
 import random
 import time
 from collections import defaultdict, deque
 from datetime import timedelta
 
-from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import Consumer, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
 from common import (DECISION_PARTITIONS, DECISIONS, DEFAULT_URL, FEEDBACK, FEEDBACK_PARTITIONS, STREAM, GcPauses,
                     Popularity, load, market, msg, part, policy)
@@ -58,9 +59,6 @@ async def main(a):
             await client.create_topic(STREAM, DECISIONS, DECISION_PARTITIONS)
         except RuntimeError:
             pass                                             # created by dispatch.py in the meantime
-    decisions = await (await connected(a.url)).consumer_group(
-        "dashers", STREAM, DECISIONS, polling_strategy=PollingStrategy.Next(), batch_length=1000,
-        auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(microseconds=500))
 
     pop = Popularity(a.stores, a.skew)
     stores = {name: Store(name, a.markets) for name in pop.names}
@@ -165,7 +163,7 @@ async def main(a):
         print(f"[dashers] snapshot: {a.stores:,} stores in {a.markets:,} markets, {pool * a.markets:,} Dashers on shift, "
               f"{a.in_flight:,} already on deliveries", flush=True)
 
-    async def on_decision(m):
+    def on_decision(m):
         d = load(m.payload())
         r, s = d["r"], stores[d["r"]]
         # Had this store's feedback changed before the run? Then the coordinator decided without that change.
@@ -178,6 +176,28 @@ async def main(a):
             stats["stale"] += 1
             stats["flipped"] += policy(newest)[0] != d["mode"]
         start(r, d["order"], d["mode"])
+
+    async def read_decisions():
+        # Every decisions partition directly, on a connection of its own, from our own position (no consumer
+        # group, nothing stored on the broker per poll). A full batch means more is waiting, so no pause.
+        c = await connected(a.url)
+        pids = list(range(DECISION_PARTITIONS))
+        who = {p: Consumer.Single(f"dashers-{os.getpid()}-p{p}") for p in pids}
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, DECISIONS, consumer=who[p], partition_id=p, count=1000,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    for m in ms:
+                        on_decision(m)
+                    more = more or len(ms) == 1000
+            if not more:
+                await asyncio.sleep(0.005)      # decisions come once a dispatch run; the check needs no hurry
 
     async def clock():
         async with lane:
@@ -211,7 +231,7 @@ async def main(a):
             for k in ("events", "checked", "stale", "flipped", "slowest_send_ms", "orders", "delivered"):
                 stats[k] = 0
 
-    await asyncio.gather(clock(), decisions.consume_messages(on_decision, asyncio.Event()), report())
+    await asyncio.gather(clock(), read_decisions(), report())
 
 
 if __name__ == "__main__":

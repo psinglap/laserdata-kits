@@ -1,6 +1,8 @@
 """The dispatch coordinator, fed by the store feedback lane.
 
-Keeps the latest feedback for every store from the store-feedback topic: Dashers heading there,
+Reads every partition of the store-feedback topic directly, on --readers connections of its own, tracking
+its own position (no consumer group: a group reader visits one partition per poll, so with 16 partitions an
+event waited for its partition's turn). Keeps the latest feedback for every store from the topic: Dashers heading there,
 Dashers waiting at the counter, the last five Dasher waits and the market's utilization. New
 orders arrive at --orders-per-s. Every --run-ms the coordinator runs dispatch over the orders
 that arrived since the last run; for each one, policy() (a stand-in for the RL agent) reads that
@@ -21,9 +23,9 @@ import time
 from collections import defaultdict
 from datetime import timedelta
 
-from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import Consumer, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
-from common import (DECISION_PARTITIONS, DECISIONS, DEFAULT_URL, FEEDBACK, STREAM, GcPauses, Popularity, Window, load,
+from common import (DECISION_PARTITIONS, DECISIONS, DEFAULT_URL, FEEDBACK, FEEDBACK_PARTITIONS, STREAM, GcPauses, Popularity, Window, load,
                     msg, part, policy)
 
 
@@ -40,9 +42,6 @@ async def main(a):
         print("[dispatch] waiting for dashers.py to create the topics…", flush=True)
         await asyncio.sleep(1)
     started_ns = time.time_ns()
-    lane = await (await connected(a.url)).consumer_group(
-        f"dispatch-coordinator-{os.getpid()}", STREAM, FEEDBACK, polling_strategy=PollingStrategy.First(), batch_length=5000,
-        auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
     out = await (await connected(a.url)).producer(STREAM, DECISIONS, topic_partitions_count=DECISION_PARTITIONS,
                                                   mode=DirectProducerConfig(batch_length=1000, linger_time=timedelta(microseconds=200)))
     pop = Popularity(a.stores, a.skew)
@@ -50,18 +49,39 @@ async def main(a):
     view, lat, stats = {}, Window(), defaultdict(int)
     to_broker, from_broker, gc_pause = Window(), Window(), GcPauses()     # where the time goes (--why)
 
-    async def on_feedback(m):
+    def on_feedback(m, now):
         e = load(m.payload())
         v = view.get(e["r"])
         if v is not None and e["seq"] <= v["seq"]:
             return                          # older or repeated change: the newest feedback wins
         view[e["r"]] = e
         if e["seq"] > 1 and e["ns"] >= started_ns:      # seq 1 is the snapshot; replayed history is a rebuild
-            now = time.time_ns()
             lat.add((now - e["ns"]) / 1e6)
             if a.why:
                 to_broker.add(m.timestamp() / 1e3 - e["ns"] / 1e6)
                 from_broker.add(now / 1e6 - m.timestamp() / 1e3)
+
+    async def read(pids):
+        # Each partition in turn, from the start of the log (the view is rebuilt from it), then from our own
+        # position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        c = await connected(a.url)
+        who = {p: Consumer.Single(f"dispatch-coordinator-{os.getpid()}-p{p}") for p in pids}
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, FEEDBACK, consumer=who[p], partition_id=p, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    now = time.time_ns()
+                    for m in ms:
+                        on_feedback(m, now)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
 
     async def runs():
         n, owed, t0 = 0, 0.0, time.monotonic()
@@ -118,7 +138,8 @@ async def main(a):
                       f"broker->coordinator p50 {fb['p50']:.1f} p99 {fb['p99']:.1f} max {fb['max']:.1f} ms  "
                       f"longest GC pause {gc_pause.take():.0f} ms", flush=True)
 
-    await asyncio.gather(lane.consume_messages(on_feedback, asyncio.Event()), runs(), report())
+    parts = list(range(FEEDBACK_PARTITIONS))
+    await asyncio.gather(runs(), report(), *(read(parts[r::a.readers]) for r in range(a.readers)))
 
 
 if __name__ == "__main__":
@@ -132,5 +153,8 @@ if __name__ == "__main__":
     p.add_argument("--rush-at", type=float, default=0)
     p.add_argument("--rush-for", type=float, default=120)
     p.add_argument("--budget-ms", type=int, default=100)
+    p.add_argument("--readers", type=int, default=2, help="connections reading the store-feedback partitions")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--why", action="store_true", help="also print where the time goes: Dasher event to broker, broker to coordinator")
     asyncio.run(main(p.parse_args()))
