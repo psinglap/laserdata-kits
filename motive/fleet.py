@@ -11,7 +11,7 @@ reefer units drift out of range on their own. Door durations are illustrative: m
 loading at a dock for 2-15 min (set them to yours in door_minutes()).
 
 --notifiers readers play the services that act on cargo-alerts (driver app push, fleet dashboard, webhooks),
-each on its own connection and consumer group, offsets stored once a second.
+each on its own connection, reading the alerts partition directly from its own position.
 
 The business number: of the alerts for doors opened outside an approved geofence, how many reached the driver
 app while that door was still open, so someone can still act on it. Prints it every second, with
@@ -22,12 +22,13 @@ import asyncio
 import gc
 import heapq
 import math
+import os
 import random
 import time
 from collections import defaultdict
 from datetime import timedelta
 
-from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import Consumer, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
 from common import (ALERTS, DEFAULT_URL, DOOR_OUTSIDE, PARTITIONS, READINGS, STREAM, TEMP_HIGH, Stalls, Window, asset,
                     ensure_topics, load, msg, part, set_point, sites)
@@ -111,7 +112,7 @@ async def main(a):
     seen = set()                            # (asset, kind, ep) the driver app already has
 
     def reader(name):
-        async def on_alert(m):
+        def on_alert(m):
             d = load(m.payload())
             if d["src_ns"] > start_ns:
                 lat.add((time.time_ns() - d["src_ns"]) / 1e6)   # live alerts only, not ones replayed at start-up
@@ -132,12 +133,21 @@ async def main(a):
         return on_alert
 
     assets_by = {x.a: x for x in assets}
-    readers = []
-    for name in NOTIFIERS[: a.notifiers]:
-        readers.append((await (await own_client()).consumer_group(
-            name, STREAM, ALERTS, polling_strategy=PollingStrategy.Next(), batch_length=1000,
-            auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(microseconds=500)),
-            reader(name)))
+    async def notify(name):
+        # One connection per notifier, reading the alerts partition directly from its own position (no consumer
+        # group, nothing stored on the broker per poll); a full batch means more is waiting, so no pause.
+        c, cb = await own_client(), reader(name)
+        who, nxt = Consumer.Single(f"{name}-{os.getpid()}"), None
+        while True:
+            ms = await c.poll_messages(STREAM, ALERTS, consumer=who, partition_id=0, count=1000, auto_commit=False,
+                                       polling_strategy=PollingStrategy.Offset(nxt) if nxt is not None
+                                       else PollingStrategy.First())
+            if ms:
+                nxt = ms[-1].offset() + 1
+                for m in ms:
+                    cb(m)
+            if len(ms) < 1000:
+                await asyncio.sleep(a.poll_ms / 1000)
     gc.freeze()                             # keep start-up objects out of the collector's way
 
     async def gateway_loop():
@@ -220,7 +230,7 @@ async def main(a):
                       DOOR_OUTSIDE, TEMP_HIGH):
                 stats[k] = 0
 
-    await asyncio.gather(gateway_loop(), report(), stalls.watch(), *(c.consume_messages(cb, asyncio.Event()) for c, cb in readers))
+    await asyncio.gather(gateway_loop(), report(), stalls.watch(), *(notify(n) for n in NOTIFIERS[: a.notifiers]))
 
 
 if __name__ == "__main__":
@@ -232,6 +242,7 @@ if __name__ == "__main__":
     p.add_argument("--outside-share", type=float, default=0.05, help="share of door openings outside a geofence")
     p.add_argument("--fault-rate", type=float, default=0.0005, help="chance per reading that a reefer unit starts to fail")
     p.add_argument("--notifiers", type=int, default=3, help="services reading cargo-alerts, each with its own reader")
+    p.add_argument("--poll-ms", type=float, default=1, help="notifier wait between polls when nothing is waiting")
     p.add_argument("--compare-s", type=float, default=60,
                    help="also count door alerts a lane this slow would still have delivered while the door was open")
     p.add_argument("--peak", type=float, default=1, help="door-opening multiplier during the peak (morning dispatch)")

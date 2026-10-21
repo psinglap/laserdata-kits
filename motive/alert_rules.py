@@ -1,6 +1,8 @@
 """The cargo alert rules, fed by the cargo sensor lane.
 
-Reads cargo-sensor-events on its own connection and consumer group. Each record is one event from one asset's
+Reads every partition of cargo-sensor-events directly, on --readers connections of its own, tracking its own
+position (no consumer group: a group reader visits one partition per poll, so with 16 partitions an event waited
+for its partition's turn and a busy host pushed the tail past the budget). Each record is one event from one asset's
 gateway: a door change (sent the moment the door opens or closes) or a one-minute reading. Every record carries
 the asset's whole current state (door open or closed and since when, cargo temperature, set point, position) and
 the asset's event sequence, so a replayed or repeated event is recognised and changes nothing, and a restarted
@@ -18,11 +20,11 @@ Prints event-to-rules p50/p99/p99.9 every second, with PASS/FAIL against --budge
 import argparse
 import asyncio
 import gc
+import os
 import time
 from collections import defaultdict
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy, SendMessage
+from apache_iggy import Consumer, IggyClient, PollingStrategy, SendMessage
 
 from common import (ALERTS, DEFAULT_URL, DOOR_CAUSE_S, DOOR_OUTSIDE, PARTITIONS, READINGS, STREAM, TEMP_BAND,
                     TEMP_HIGH, Stalls, Window, ensure_topics, inside_approved, load, msg)
@@ -46,10 +48,6 @@ async def main(a):
         return c
 
     await ensure_topics(await own_client(), READINGS, ALERTS)
-    events = await (await own_client()).consumer_group(
-        f"{a.name}-{READINGS}", STREAM, READINGS, polling_strategy=PollingStrategy.Next(), batch_length=5000,
-        auto_commit=AutoCommit.Interval(timedelta(seconds=1)),     # offsets stored once a second, not per poll
-        poll_interval=timedelta(microseconds=500))
     out = await (await own_client()).producer(STREAM, ALERTS, topic_partitions_count=PARTITIONS[ALERTS])
     lat, stats, stalls = Window(), defaultdict(float), Stalls()
     seq = {}                                # asset -> last event sequence applied
@@ -58,12 +56,14 @@ async def main(a):
     caught_up = [False]                     # a new reader first replays events from before it joined
     gc.freeze()                             # keep start-up objects out of the collector's way
 
-    async def on_event(m):
+    def on_event(m, now):
         d = load(m.payload())
-        now = time.time_ns()
         age = (now - d["ns"]) / 1e6
         if caught_up[0]:
             lat.add(age)
+            b = m.timestamp() / 1e3                 # broker append time, ms: where the time went
+            stats["to_broker"] = max(stats["to_broker"], b - d["ns"] / 1e6)
+            stats["from_broker"] = max(stats["from_broker"], now / 1e6 - b)
         else:                               # still replaying: track the oldest event seen this second
             stats["replayed"] += 1
             stats["max_age"] = max(stats["max_age"], age)
@@ -88,6 +88,28 @@ async def main(a):
             return                          # replayed from long ago: state rebuilt, nobody needs this alert now
         pending.append(SendMessage(msg(a=k, kind=kind, cause=cause, ep=d["seq"], src_ns=d["ns"], temp=d["temp"],
                                        lat=d["lat"], lon=d["lon"])))
+
+    async def read(pids):
+        # Each partition in turn, from the start of the log (state is rebuilt from it), then from our own
+        # position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        c = await own_client()
+        who = {p: Consumer.Single(f"{a.name}-{os.getpid()}-p{p}") for p in pids}
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, READINGS, consumer=who[p], partition_id=p, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    now = time.time_ns()
+                    for m in ms:
+                        on_event(m, now)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
 
     async def send_alerts():
         # Alerts are small and come in bursts; one batch every 2 ms keeps sends out of the read loop.
@@ -119,10 +141,12 @@ async def main(a):
                   f"p99.9 {r['p999']:6.1f}ms  {ok} (<{a.budget_ms}ms)  door changes {int(stats['doors']):,}  "
                   f"alerts sent {int(stats['sent']):,} (door outside geofence {int(stats[DOOR_OUTSIDE]):,}, "
                   f"temperature {int(stats[TEMP_HIGH]):,}, cause named {int(stats['temp_door']):,})  "
-                  f"assets in excursion {len(hot):,}  {stalls.read()}", flush=True)
+                  f"assets in excursion {len(hot):,}  {stalls.read()}  slowest event->broker "
+                  f"{stats['to_broker']:.0f} ms, broker->rules {stats['from_broker']:.0f} ms", flush=True)
             stats.clear()
 
-    await asyncio.gather(events.consume_messages(on_event, asyncio.Event()), send_alerts(), report(), stalls.watch())
+    parts = list(range(PARTITIONS[READINGS]))
+    await asyncio.gather(send_alerts(), report(), stalls.watch(), *(read(parts[r::a.readers]) for r in range(a.readers)))
 
 
 if __name__ == "__main__":
@@ -130,6 +154,9 @@ if __name__ == "__main__":
     p.add_argument("--url", default=DEFAULT_URL)
     p.add_argument("--name", default="alert-rules")
     p.add_argument("--budget-ms", type=int, default=50, help="event-to-rules p99 budget for the lane")
+    p.add_argument("--readers", type=int, default=2, help="connections reading the cargo-sensor-events partitions")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--replay-alert-s", type=float, default=30,
                    help="after a restart, still send alerts for events younger than this")
     asyncio.run(main(p.parse_args()))
