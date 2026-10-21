@@ -31,9 +31,9 @@ Needs Docker and Python 3.10+. Defaults: 200,000 accounts with orders on the boo
 second (about the "over 1mm requests a minute" Kraken published in 2023; the report rate is our assumption).
 
 ```
-docker compose up -d                                  # Apache Iggy 0.9.0 on :8090
-pip install -r requirements.txt                       # apache-iggy 0.9.0
-python engine.py &                                    # the spot engine's execution reports
+docker compose up -d                                   # Apache Iggy 0.9.0 on :8090
+pip install -r requirements.txt                        # apache-iggy 0.9.0
+python engine.py &                                     # the spot engine's execution reports
 python gateway.py --name gw-1 --index 0 --gateways 2 & # a gateway with half the sessions
 python gateway.py --name gw-2 --index 1 --gateways 2   # another; each reads every partition
 ```
@@ -79,8 +79,8 @@ back 0.3–3 s later. Change `--drops` and `--away` to match what you see.
    Pass: engine-to-gateway p99 under 10 ms on every gateway, and `gaps` stays 0.
 2. **Ledger export at full volume:** `python ledger_export.py --mbps 50` while it runs.
    Pass: the lane's p99 moves by less than 10%.
-3. **Reconnect storm and a late gateway:** `python gateway.py ... --drops 500`, then start a third gateway
-   mid-run; it rebuilds its index from the log before logging sessions on.
+3. **Reconnect storm and a gateway restart:** run `gw-1` with `--drops 500`, and stop and restart `gw-2`
+   mid-run; on restart it rebuilds its index from the log before logging sessions on.
    Pass: every reconnect recovered, zero gaps and zero unrecoverable resends, resend p99 under 50 ms.
 
 ## Shadow your own traffic
