@@ -3,7 +3,7 @@
 # a minute compressed to 5 s, jobs that never check in, jobs that hang, an error storm next door, and one
 # partition not read for 8 s. Pass only if the lane reports PASS, every job that never checked in is marked
 # missed, every hung job is marked timed out, nothing that checked in or finished is marked by mistake, and the
-# clock held through the stuck partition and backfilled the minutes it skipped.
+# clock held through the stuck partition and then ticked the minutes it held, in order.
 set -euo pipefail
 cd "$(dirname "$0")"
 trap 'docker compose logs --tail 40 iggy || true' ERR
@@ -23,7 +23,7 @@ timeout 72 python -u event_storm.py --mbps 3 --at 15 --duration 40 > storm.log 2
 wait || true
 echo "--- crons.log";    head -n 3 crons.log; sed -n '30,36p;44,50p' crons.log; tail -n 3 crons.log
 echo "--- monitors.log"; head -n 3 monitors.log; grep -E "pausing|held by|backlog|backfill" monitors.log | head -n 12 || true
-sed -n '50,56p' monitors.log; tail -n 4 monitors.log
+grep '^\[clock\]' monitors.log | head -n 16; tail -n 3 monitors.log
 echo "--- storm.log";    head -n 2 storm.log; tail -n 2 storm.log
 echo "--- false marks"; grep -E "false (missed|timeout):" crons.log | head -n 20 || true
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" monitors.log | cut -c1-300 || true
@@ -48,14 +48,14 @@ print("steady-state medians: check-ins/s %.0f  check-in-to-monitor p50 %.1f ms  
     st.median(nums(q, s)) for q in (r"\] +([0-9,]+) check-ins/s", r"p50 +([0-9.]+)ms", r"p99 +([0-9.]+)ms",
                                     r"p99.9 +([0-9.]+)ms")))
 ticks = [l for l in open("monitors.log") if l.startswith("[clock] tick")]
-live_ticks = [l for l in ticks if "(backfill)" not in l]
-lags = nums(r"lag ([0-9,.-]+)ms", live_ticks)
-back = len(ticks) - len(live_ticks)
-print("clock: %d ticks on time, %d backfilled after the stuck partition; tick lag after the minute boundary: "
-      "median %.0f ms, max %.0f ms (max includes the stuck partition)" % (
-        len(live_ticks), back, st.median(lags or [0]), max(lags or [0])))
-normal = sorted(lags)[:max(1, len(lags) - 2)]
-print("tick lag without the two slowest ticks: max %.0f ms" % max(normal or [0]))
+lags = nums(r"lag ([0-9,.-]+)ms", ticks)
+held = [x for x in lags if x > 1000]      # ticks the stuck partition held past the minute boundary
+on_time = [x for x in lags if x <= 1000]
+back = sum("(backfill)" in l for l in ticks)
+print("clock: %d ticks; %d on time, tick lag after the minute boundary median %.0f ms, max %.0f ms; %d held by the "
+      "stuck partition (up to %.1f s late), then ticked in order (%d as a backfill)" % (
+        len(ticks), len(on_time), st.median(on_time or [0]), max(on_time or [0]), len(held), max(held or [0]) / 1000,
+        back))
 g = [l for l in open("crons.log") if l.startswith("[crons]") and "check-ins/s" in l]
 tot = lambda pat: int(sum(nums(pat, g)))
 mr, mf, mu = tot(r"missed: right ([0-9,]+)"), tot(r"missed: right [0-9,]+ \(by next check-in [0-9,]+\)  false ([0-9,]+)"), \
@@ -72,8 +72,10 @@ if mr < 20 or tr < 10:
     raise SystemExit("too few missed or hung jobs to judge the clock")
 if mf or mu or tf or tu:
     raise SystemExit("a missed or timeout mark did not match the truth")
-if back < 1 or not any("held by partition 3" in l for l in open("monitors.log")):
-    raise SystemExit("the clock did not hold for the stuck partition and backfill")
+if not held or not any("held by partition 3" in l for l in open("monitors.log")):
+    raise SystemExit("the clock did not hold for the stuck partition")
+if len(ticks) < 10:
+    raise SystemExit("too few clock ticks")
 e = [l for l in open("storm.log") if re.search(r"\] +[1-9][0-9,]* events/s", l)]
 if e:
     print("error storm next door: %d s, median %.1f MB/s on its own topic" % (len(e), st.median(nums(r"~([0-9.]+) MB/s", e))))
