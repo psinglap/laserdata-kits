@@ -1,8 +1,9 @@
 """The cargo alert rules, fed by the cargo sensor lane.
 
 Reads every partition of cargo-sensor-events directly, on --readers connections of its own, tracking its own
-position (no consumer group: a group reader visits one partition per poll, so with 16 partitions an event waited
-for its partition's turn and a busy host pushed the tail past the budget). Each record is one event from one asset's
+position and storing it on the broker at most once a second (no consumer group: a group reader visits one
+partition per poll, so with 16 partitions an event waited for its partition's turn and a busy host pushed the
+tail past the budget). Each record is one event from one asset's
 gateway: a door change (sent the moment the door opens or closes) or a one-minute reading. Every record carries
 the asset's whole current state (door open or closed and since when, cargo temperature, set point, position) and
 the asset's event sequence, so a replayed or repeated event is recognised and changes nothing, and a restarted
@@ -20,7 +21,6 @@ Prints event-to-rules p50/p99/p99.9 every second, with PASS/FAIL against --budge
 import argparse
 import asyncio
 import gc
-import os
 import time
 from collections import defaultdict
 
@@ -90,19 +90,23 @@ async def main(a):
                                        lat=d["lat"], lon=d["lon"])))
 
     async def read(pids):
-        # Each partition in turn, from the start of the log (state is rebuilt from it), then from our own
-        # position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        # Each partition in turn. Resume from the broker's stored offset once (from the start of the log the
+        # first time), then read on from our own position, storing the offset at most once a second: an offset
+        # write on every poll stalls the lane. A full batch means more is waiting, so no pause.
         c = await own_client()
-        who = {p: Consumer.Single(f"{a.name}-{os.getpid()}-p{p}") for p in pids}
-        nxt = {}
+        who = {p: Consumer.Single(f"{a.name}-p{p}") for p in pids}
+        nxt, committed = {}, {}
         while True:
             more = False
             for p in pids:
+                commit = time.monotonic() - committed.get(p, 0) >= a.commit_s
                 ms = await c.poll_messages(STREAM, READINGS, consumer=who[p], partition_id=p, count=a.batch,
-                                           auto_commit=False,
+                                           auto_commit=commit,
                                            polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
-                                           else PollingStrategy.First())
+                                           else PollingStrategy.Next())
                 if ms:
+                    if commit:
+                        committed[p] = time.monotonic()
                     nxt[p] = ms[-1].offset() + 1
                     now = time.time_ns()
                     for m in ms:
@@ -157,6 +161,7 @@ if __name__ == "__main__":
     p.add_argument("--readers", type=int, default=2, help="connections reading the cargo-sensor-events partitions")
     p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
     p.add_argument("--batch", type=int, default=5000)
+    p.add_argument("--commit-s", type=float, default=1, help="store each partition's offset at most this often")
     p.add_argument("--replay-alert-s", type=float, default=30,
                    help="after a restart, still send alerts for events younger than this")
     asyncio.run(main(p.parse_args()))
