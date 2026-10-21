@@ -50,6 +50,7 @@ They print a line a second:
 ```
 [alert-rules]  5,000 events/s  event-to-rules p50 …ms  p99 …ms  p99.9 …ms  PASS (<50ms)  door changes …
                alerts sent … (door outside geofence …, temperature …, cause named …)  stall gc …ms loop …ms
+               slowest event->broker … ms, broker->rules … ms
 [fleet]  5,000 events/s (steady)  door changes …  doors opened outside a geofence …
          door alerts at the driver app …, while the door was still open … (at 60 s it would be …)
          temperature alerts …  event-to-notifiers n … p50 …ms p99 …ms  stall gc …ms loop …ms
@@ -58,9 +59,10 @@ They print a line a second:
 "At 60 s it would be …" counts the same door alerts whose door stayed open longer than 60 seconds: what a lane
 that delivered the alert a minute after the door opened (one environmental-reading interval) would still have
 caught while the door was open. Set `--compare-s`. "Stall" is the longest garbage-collection pause and event-loop
-stall in that process that second, so a slow second can be traced rather than guessed at.
+stall in that process that second, and "slowest event->broker" and "broker->rules" split that second's slowest
+event between the send and the read, so a slow second can be traced rather than guessed at.
 
-**What the numbers mean.** The kit times each event from the moment `fleet.py` creates it to the moment `alert_rules.py` has evaluated it, and each alert from the gateway event that raised it to all three notifiers, through Python clients, on whatever machine you run it on. On a shared 2-vCPU CI runner with the broker and all scripts on one box, at reduced scale (120,000 assets, a door opening every 30 minutes per asset, about 2,200 events/s and 3 notifiers), two green runs held event-to-rules p50 11.1–12.6 ms, p99 21.6–24.9 ms and p99.9 23.9–27.8 ms (59 of 59 steady-state seconds inside 50 ms in each), and event-to-notifiers (both hops) p50 13.8–15.5 ms and p99 24.8–29.2 ms. With 2 MB/s of dead-zone backfill on the same broker, the lane's p99 moved by under 1 ms (21.4 to 21.6 ms, 24.7 to 25.4 ms). Of 187 and 212 door-outside-geofence alerts, every one reached the driver app while the door was still open; with the same illustrative door durations, an alert that took 60 s would have arrived after the door had shut for 79 (42%) and 86 (41%) of them. That is the end-to-end loop through this demo code, not the broker alone. The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines. The rules in the kit are stand-ins that take no time; yours add their own.
+**What the numbers mean.** The kit times each event from the moment `fleet.py` creates it to the moment `alert_rules.py` has evaluated it, and each alert from the gateway event that raised it to all three notifiers, through Python clients, on whatever machine you run it on. On a shared 2-vCPU CI runner with the broker and all scripts on one box, at reduced scale (120,000 assets, a door opening every 30 minutes per asset, about 2,200 events/s and 3 notifiers), ten green runs in a row held event-to-rules p50 3.4–7.0 ms, p99 6.3–13.3 ms and p99.9 7.4–14.9 ms (589 of 591 steady-state seconds inside 50 ms: nine runs had none outside, one had 2 of 60), and event-to-notifiers (both hops) p50 5.8–10.6 ms and p99 10.2–16.9 ms. With 2 MB/s of dead-zone backfill on the same broker, the lane's p99 moved by at most 0.3 ms. Of 165 to 198 door-outside-geofence alerts per run, every one reached the driver app while the door was still open; with the same illustrative door durations, an alert that took 60 s would have arrived after the door had shut for 33–47% of them (57 to 88 per run). That is the end-to-end loop through this demo code, not the broker alone. The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines. The rules in the kit are stand-ins that take no time; yours add their own.
 
 | File | What it is |
 |---|---|
