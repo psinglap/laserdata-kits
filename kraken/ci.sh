@@ -22,7 +22,7 @@ sleep 16
 # gw-2 starts 20 s into the run: it rebuilds its index from the whole log before logging its sessions on.
 timeout 60 python -u gateway.py --name gw-2 --index 1 --gateways 2 --accounts $A > gw-2.log 2>&1 &
 wait || true
-echo "--- engine.log"; head -n 2 engine.log; grep -m 1 burst engine.log || true; tail -n 2 engine.log
+echo "--- engine.log"; head -n 2 engine.log; grep burst engine.log | sed -n 5p || true; tail -n 2 engine.log
 echo "--- export.log"; head -n 2 export.log; tail -n 2 export.log
 for g in gw-1 gw-2; do
   echo "--- $g.log"; head -n 1 $g.log; grep -E "rebuilt|catching up" $g.log | tail -n 2 || true; tail -n 3 $g.log
