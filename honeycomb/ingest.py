@@ -162,6 +162,9 @@ async def main(a):
                 stats["held_right"] += 1    # a page a query-only heartbeat would have sent, and nobody got
             else:
                 stats["held_wrong"] += 1
+                behind = [k for k in kps[i] if k in stalled_set]
+                print(f"[ingest] wrong hold: {d['ds']} last batch {gap / 1e9:.2f}s before the verdict, "
+                      f"Kafka partitions {kps[i]} of which behind {behind}", flush=True)
 
     async def report_line():
         while True:

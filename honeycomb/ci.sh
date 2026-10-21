@@ -23,6 +23,7 @@ wait || true
 echo "--- ingest.log";    head -n 3 ingest.log; sed -n '28,32p;44,50p' ingest.log; tail -n 3 ingest.log
 echo "--- freshness.log"; head -n 3 freshness.log; sed -n '42,48p' freshness.log; tail -n 4 freshness.log
 echo "--- backfill.log";  head -n 2 backfill.log; tail -n 2 backfill.log
+echo "--- wrong holds"; grep "wrong hold" ingest.log | head -n 20 || true
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" freshness.log | cut -c1-300 || true
 # Skip a 10 s warm-up while topics come online; a shared CI runner may blip, so require 95% of seconds to pass.
 steady=$(grep -E '\[freshness\] +[1-9][0-9,]* msgs/s' freshness.log | tail -n +11 || true)
@@ -52,7 +53,7 @@ g = [l for l in open("ingest.log") if l.startswith("[ingest]")]
 tot = lambda pat: int(sum(nums(pat, g)))
 silences, right = tot(r"silences started ([0-9,]+)"), tot(r"fired right ([0-9,]+)")
 missed, spurious = tot(r"missed ([0-9,]+)"), tot(r"spurious pages ([0-9,]+)")
-held, held_wrong = tot(r"behind ([0-9,]+) \(wrong"), tot(r"\(wrong ([0-9,]+)\)")
+held, X
 late = nums(r"max \+([0-9.]+)s\)", [l for l in g if not re.search(r"fired right 0 ", l)])
 print("heartbeats: silences started %d  fired right %d  fired after the window: max +%.2f s  missed %d  "
       "spurious pages %d  held while Retriever behind %d (wrong %d)" % (

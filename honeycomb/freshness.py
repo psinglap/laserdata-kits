@@ -168,7 +168,7 @@ if __name__ == "__main__":
     p.add_argument("--name", default="freshness")
     p.add_argument("--budget-ms", type=int, default=50, help="receipt-to-freshness p99 budget for the lane")
     p.add_argument("--heartbeat-s", type=float, default=60, help="heartbeat window: no data for this long pages")
-    p.add_argument("--behind-s", type=float, default=2,
+    p.add_argument("--behind-s", type=float, default=5,
                    help="a batch not queryable after this long means Retriever is behind")
     p.add_argument("--eval-every", type=float, default=1.0, help="seconds between heartbeat checks per dataset")
     asyncio.run(main(p.parse_args()))
