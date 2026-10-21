@@ -59,12 +59,12 @@ that took 150 ms (the p99 Jump published for its telemetry pipeline) would still
 `--compare-ms`. "Stall" is the longest garbage-collection pause and event-loop stall in that process that second,
 so a slow second can be traced rather than guessed at.
 
-**What the numbers mean.** CI_NUMBERS
+**What the numbers mean.** The kit times each sample from the moment `links.py` creates it to the moment `link_rules.py` has evaluated it, and each degraded alert from the first bad sample to all three consumers, through Python clients, on whatever machine you run it on. On a shared 2-vCPU CI runner with the broker and all scripts on one box, at reduced scale (50 links with a sample every 20 ms, about 2,500 samples/s, a fade every 20 s per link with weather fades shortened to 3–8 s, and 3 consumers), a green run held sample-to-rules p50 7.6 ms, p99 14.0 ms and p99.9 15.4 ms (62 of 62 steady-state seconds inside 50 ms), and fade-to-consumers (both hops) p50 11.4 ms and p99 14.0 ms. With a slow reader on the same topic falling 40 s behind, and then 2 MB/s of log shipping on the same broker, the lane's p99 moved from 13.4 ms to 13.6 ms and 14.1 ms. Of 121 degraded alerts (31 of them short bursts), every one reached the console while the link was still degraded; with the same illustrative fade durations, an alert that took 150 ms would have arrived after the fade had passed for 5 of them (4%). That is the end-to-end loop through this demo code, not the broker alone. The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines. The rules in the kit are stand-ins that take no time; yours add their own.
 
 | File | What it is |
 |---|---|
 | `links.py` | A network of links. Each publishes RSSI, SNR and BER to `link-samples` every 20 ms, keyed by link, with its sample sequence; links fade and recover. Three consumers (network console, on-call, status board) read `link-alerts`; the console checks whether each degraded alert's link is still degraded. |
-| `link_rules.py` | The rules: a per-link SNR baseline learned from clean samples, DEGRADED on BER above the limit or SNR well below baseline, RECOVERED after five clean samples. `rules()` is where yours go. Prints the lane's p99. |
+| `link_rules.py` | The rules: a per-link SNR baseline learned from clean samples, DEGRADED on BER above the limit or SNR well below baseline, RECOVERED after five clean samples. `rules()` is where yours go. Reads its partitions directly from its own position. Prints the lane's p99. |
 | `slow_reader.py` | A slow consumer on the lane itself (a research capture or backfill), for the slow-consumer test. |
 | `log_flood.py` | Log files shipped from hosts, on their own topic, for the isolation test. |
 | `redpanda_bridge.py` | Copies your link telemetry topic from Redpanda into Iggy as a read-only consumer group, for a shadow run on real traffic. |
@@ -78,8 +78,8 @@ so a slow second can be traced rather than guessed at.
 2. **Slow consumer and log shipping next door:** `python slow_reader.py --rate 1000` and
    `python log_flood.py --mbps 50` while both run.
    Pass: the lane's p99 moves by less than 10% while the slow reader falls further behind.
-3. **Restart the rules:** stop `link_rules.py` and start it again; it resumes from its stored offset (stored once a
-   second), relearns baselines, and still sends alerts for samples from the last 30 seconds.
+3. **Restart the rules:** stop `link_rules.py` and start it again; it replays the lane from the log, rebuilds every
+   link's baseline and state, and still sends alerts for samples from the last 30 seconds.
    Pass: it catches up within seconds, and no alert reaches a consumer twice as a new alert.
 
 ## Shadow your own traffic
