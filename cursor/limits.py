@@ -1,6 +1,8 @@
 """The spend-limit service, fed by the usage lane.
 
-Reads the usage topic on its own connection and consumer group. Each record is one API server's running
+Reads the usage topic directly, partition by partition, on --readers connections of its own
+(no consumer group: a group reader visits one partition per poll, so with 16 partitions a record waited for its
+partition's turn). Each record is one API server's running
 paid usage for one user in the current billing period (the resulting total in USD, with a sequence), so a
 user's usage is the sum of the latest totals from every API server, and replays or repeats change nothing.
 
@@ -20,9 +22,8 @@ import gc
 import os
 import time
 from collections import defaultdict
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy, SendMessage
+from apache_iggy import Consumer, IggyClient, PollingStrategy, SendMessage
 
 from common import (DECISIONS, DEFAULT_URL, PARTITIONS, STREAM, USAGE, Window, ensure_topics, limit, load, msg,
                     period, user)
@@ -35,9 +36,6 @@ async def main(a):
         return c
 
     await ensure_topics(await own_client(), USAGE, DECISIONS)
-    usage = await (await own_client()).consumer_group(
-        f"{a.name}-{USAGE}-{os.getpid()}", STREAM, USAGE, polling_strategy=PollingStrategy.First(),
-        batch_length=5000, auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
     out = await (await own_client()).producer(STREAM, DECISIONS, topic_partitions_count=PARTITIONS[DECISIONS])
     users = [user(i) for i in range(a.users)]
     limits = {u: limit(u, a.requests_per_s, a.users, a.period_s) for u in users}
@@ -64,7 +62,7 @@ async def main(a):
             stopped[p] += 1
             by_src[(p, limits[u][1])] += 1
 
-    async def on_usage(m):
+    def on_usage(m):
         s = load(m.payload())
         now = time.time_ns()
         age = (now - s["ns"]) / 1e6
@@ -104,6 +102,27 @@ async def main(a):
                     await out.send(batch)
                     stats["decisions"] += len(batch)
 
+    async def read(pids):
+        # Each partition in turn, from the start of the log (state is rebuilt from it), then from our own
+        # position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        c = await own_client()
+        who = Consumer.Single(f"{a.name}-{os.getpid()}")
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, USAGE, consumer=who, partition_id=p, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    for m in ms:
+                        on_usage(m)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
+
     async def report():
         while True:
             await asyncio.sleep(1)
@@ -136,12 +155,17 @@ async def main(a):
             for k in [k for k in last if k[0] <= old]:
                 del last[k]
 
-    await asyncio.gather(usage.consume_messages(on_usage, asyncio.Event()), send_decisions(), report())
+    parts = list(range((await (await own_client()).get_topic(STREAM, USAGE)).partitions_count))
+    await asyncio.gather(send_decisions(), report(),
+                         *(read(parts[r::a.readers]) for r in range(a.readers)))
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--url", default=DEFAULT_URL)
+    p.add_argument("--readers", type=int, default=2, help="connections reading the usage partitions")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--name", default="limits")
     p.add_argument("--budget-ms", type=int, default=50, help="usage-to-limit-check p99 budget for the lane")
     p.add_argument("--users", type=int, default=20_000, help="must match api_servers.py")

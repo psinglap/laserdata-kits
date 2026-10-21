@@ -1,6 +1,8 @@
 """The provider health evaluator, fed by the outcomes lane.
 
-Reads provider-outcomes on its own connection and consumer group. Each record is one provider call in one turn:
+Reads provider-outcomes directly, partition by partition, on --readers connections of its own
+(no consumer group: a group reader visits one partition per poll, so with 16 partitions a record waited for its
+partition's turn). Each record is one provider call in one turn:
 stage:provider:region, ok or failed, time to first byte, and the worker's sequence for that key, so a replayed or
 repeated outcome is recognised and changes nothing.
 
@@ -19,9 +21,8 @@ import gc
 import os
 import time
 from collections import defaultdict, deque
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy, SendMessage
+from apache_iggy import Consumer, IggyClient, PollingStrategy, SendMessage
 
 from common import DEFAULT_URL, DEGRADED, HEALTH, OK, OUTCOMES, PARTITIONS, STREAM, Window, ensure_topics, load, msg
 
@@ -65,9 +66,6 @@ async def main(a):
         return c
 
     await ensure_topics(await own_client(), OUTCOMES, HEALTH)
-    outcomes = await (await own_client()).consumer_group(
-        f"{a.name}-{OUTCOMES}-{os.getpid()}", STREAM, OUTCOMES, polling_strategy=PollingStrategy.First(),
-        batch_length=5000, auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
     out = await (await own_client()).producer(STREAM, HEALTH, topic_partitions_count=PARTITIONS[HEALTH])
     lat, stats = Window(), defaultdict(float)
     seq = {}                                # (worker, key) -> last sequence applied
@@ -78,7 +76,7 @@ async def main(a):
     span = int(a.window_s * 1e9)
     gc.freeze()                             # keep start-up objects out of the collector's way
 
-    async def on_outcome(m):
+    def on_outcome(m):
         d = load(m.payload())
         now = time.time_ns()
         age = (now - d["ns"]) / 1e6
@@ -120,6 +118,27 @@ async def main(a):
                     await out.send(batch)
                     stats["sent"] += len(batch)
 
+    async def read(pids):
+        # Each partition in turn, from the start of the log (state is rebuilt from it), then from our own
+        # position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        c = await own_client()
+        who = Consumer.Single(f"{a.name}-{os.getpid()}")
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, OUTCOMES, consumer=who, partition_id=p, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    for m in ms:
+                        on_outcome(m)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
+
     async def report():
         while True:
             await asyncio.sleep(1)
@@ -142,12 +161,17 @@ async def main(a):
                   f"degraded now {','.join(down) or '-'}", flush=True)
             stats.clear()
 
-    await asyncio.gather(outcomes.consume_messages(on_outcome, asyncio.Event()), send_verdicts(), report())
+    parts = list(range((await (await own_client()).get_topic(STREAM, OUTCOMES)).partitions_count))
+    await asyncio.gather(send_verdicts(), report(),
+                         *(read(parts[r::a.readers]) for r in range(a.readers)))
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--url", default=DEFAULT_URL)
+    p.add_argument("--readers", type=int, default=2, help="connections reading the provider-outcomes partitions")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--name", default="health")
     p.add_argument("--budget-ms", type=int, default=50, help="outcome-to-evaluator p99 budget for the lane")
     p.add_argument("--window-s", type=float, default=1.0, help="seconds of outcomes judged per key")

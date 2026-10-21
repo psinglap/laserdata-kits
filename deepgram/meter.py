@@ -1,6 +1,8 @@
 """The usage meter, fed by the usage lane: live streaming usage into per-project, per-minute usage summaries.
 
-Reads the usage topic on its own connection and consumer group. Each message is one live stream's billable
+Reads the usage topic directly, partition by partition, on --readers connections of its own
+(no consumer group: a group reader visits one partition per poll, so with 16 partitions a record waited for its
+partition's turn). Each message is one live stream's billable
 audio so far (the resulting total, with a per-stream sequence), so the meter adds only what is new:
   * a message whose sequence it has already applied (a retry, or a replay after a restart) adds nothing;
   * a newer one adds its total minus the last total applied for that stream, so a lost message in between
@@ -24,9 +26,8 @@ import gc
 import os
 import time
 from collections import defaultdict
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy, SendMessage
+from apache_iggy import Consumer, IggyClient, PollingStrategy, SendMessage
 
 from common import DEFAULT_URL, PARTITIONS, STREAM, SUMMARIES, USAGE, Window, ensure_topics, load, msg, usd
 
@@ -38,9 +39,6 @@ async def main(a):
         return c
 
     await ensure_topics(await own_client(), USAGE, SUMMARIES)
-    usage = await (await own_client()).consumer_group(
-        f"{a.name}-{USAGE}-{os.getpid()}", STREAM, USAGE, polling_strategy=PollingStrategy.First(),
-        batch_length=5000, auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
     out = await (await own_client()).producer(STREAM, SUMMARIES, topic_partitions_count=PARTITIONS[SUMMARIES])
     lat, stats = Window(), defaultdict(float)
     last = {}                               # stream -> (sequence, audio ms) last applied
@@ -55,7 +53,7 @@ async def main(a):
     caught_up = [False]                     # a new reader first replays usage from before it joined
     gc.freeze()                             # keep start-up objects out of the collector's way
 
-    async def on_usage(m):
+    def on_usage(m):
         u = load(m.payload())
         now = time.time_ns()
         age = (now - u["ns"]) / 1e6
@@ -101,6 +99,27 @@ async def main(a):
                 await out.send(batch)
                 stats["summaries"] += len(batch)
 
+    async def read(pids):
+        # Each partition in turn, from the start of the log (state is rebuilt from it), then from our own
+        # position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        c = await own_client()
+        who = Consumer.Single(f"{a.name}-{os.getpid()}")
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, USAGE, consumer=who, partition_id=p, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    for m in ms:
+                        on_usage(m)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
+
     async def report():
         while True:
             await asyncio.sleep(1)
@@ -138,12 +157,17 @@ async def main(a):
             for k in [k for k, t in closed.items() if t < gone]:
                 del closed[k]
 
-    await asyncio.gather(usage.consume_messages(on_usage, asyncio.Event()), send_summaries(), report())
+    parts = list(range((await (await own_client()).get_topic(STREAM, USAGE)).partitions_count))
+    await asyncio.gather(send_summaries(), report(),
+                         *(read(parts[r::a.readers]) for r in range(a.readers)))
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--url", default=DEFAULT_URL)
+    p.add_argument("--readers", type=int, default=2, help="connections reading the usage partitions")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--name", default="meter")
     p.add_argument("--budget-ms", type=int, default=50, help="usage-to-summary p99 budget for the lane")
     p.add_argument("--summary-ms", type=int, default=250, help="publish changed per-project totals this often")
