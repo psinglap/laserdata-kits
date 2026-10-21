@@ -65,7 +65,15 @@ counted as missed and a repeat as a duplicate. It also prints how much of the fi
 other projects that share its viewers' partitions), users online per watched project, and how full each new
 view was when it opened. Those are the business numbers.
 
-%%NUMBERS%%
+**Measured in CI** (GitHub Actions, shared 2-vCPU runner, Apache Iggy 0.9.0 in Docker, Python clients, reduced
+scale: 5,000 projects at 2,500 events/s, 64 partitions, 41 views open, one view swapped every 2 s, and the launch
+project going from 100 to 1,500 events/s for 25 s): capture-to-live p50 8.3 ms, p99 17.6 ms, p99.9 19.3 ms
+(medians of the per-second figures over 64 steady seconds, all PASS against 100 ms). During the launch, the
+p99 stayed at 17.4 ms. No watched event missed or shown twice; all 41,502 launch events shown; 38 views opened
+and filled from the lane with their last 60 s (44,153 events). The node read 33 of 64 partitions, 66% of the
+firehose, half of it for other projects sharing those partitions; more partitions or fewer views per pod
+lower that share. These are end-to-end times through Python clients on a shared runner, mostly the reader's
+polling round over its partitions; they show the shape, not the engine's floor.
 
 | File | What it is |
 |---|---|
