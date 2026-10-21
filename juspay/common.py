@@ -10,7 +10,7 @@ STREAM = "release-guard"
 OUTCOMES = "payment-outcomes"   # the lane: each payment attempt's final status, with the release that served it
 VERDICTS = "release-verdicts"   # the comparison's decisions back to the rollout: SCALE, HOLD or ABORT
 API_LOGS = "api-logs"           # a heavy, latency-tolerant API-log stream on the same broker
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: small writes go out at once
 PARTITIONS = {OUTCOMES: 16, VERDICTS: 1, API_LOGS: 32}
 
 # Juspay's engineering post: Autopilot staggers a new deployment's traffic "from 1% onwards", and the

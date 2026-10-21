@@ -9,7 +9,7 @@ STREAM = "feed-dedup"
 VIEWED = "viewed-posts"         # the lane: each app flush of viewed post IDs, keyed by user
 REQUESTS = "feed-requests"      # the user's next feed request, which must already exclude those posts
 ENGAGEMENT = "engagement-events"  # a heavy, latency-tolerant stream on the same broker (likes, views for counters)
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: small writes go out at once
 PARTITIONS = {VIEWED: 16, REQUESTS: 16, ENGAGEMENT: 32}
 
 

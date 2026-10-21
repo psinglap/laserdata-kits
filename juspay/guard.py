@@ -1,7 +1,8 @@
 """The release guard: the A/B comparison between the canary and the stable release, fed by the lane.
 
-Reads payment-outcomes on its own connection and consumer group, keeps success counts per release in
-100 ms buckets, and every --tick seconds compares the canary with the stable release:
+Reads every partition of payment-outcomes directly, on --readers connections of its own, tracking its own
+position (no consumer group: a group reader visits one partition per poll, so with 16 partitions an outcome
+waited for its partition's turn). It keeps success counts per release in 100 ms buckets, and every --tick seconds compares the canary with the stable release:
   * ABORT when, over the last --window seconds, the canary's success rate is lower by at least
     --min-drop with a z-score at or below -z_abort (two-proportion test), on at least --min-n canary payments;
   * SCALE to the next share on the ladder when the current stage has at least --stage-n canary
@@ -18,9 +19,8 @@ import gc
 import os
 import time
 from collections import Counter, defaultdict
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy, SendMessage
+from apache_iggy import Consumer, IggyClient, PollingStrategy, SendMessage
 
 from common import (DEFAULT_URL, LADDER, OUTCOMES, PARTITIONS, STREAM, SUCCESSES, VERDICTS, Window, ensure_topics,
                     load, msg, z_score)
@@ -33,9 +33,6 @@ async def main(a):
         return c
 
     await ensure_topics(await own_client(), OUTCOMES, VERDICTS)
-    outcomes = await (await own_client()).consumer_group(
-        f"{a.name}-{OUTCOMES}-{os.getpid()}", STREAM, OUTCOMES, polling_strategy=PollingStrategy.First(),
-        batch_length=5000, auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
     verdicts = await (await own_client()).producer(STREAM, VERDICTS, topic_partitions_count=PARTITIONS[VERDICTS])
     lat, stats = Window(), defaultdict(int)
     seen = {}                               # payment ID -> (last attempt sequence, when)
@@ -48,7 +45,7 @@ async def main(a):
         g.update(run=run, canary=canary, stable=stable, share=LADDER[0], stage_at=time.monotonic(),
                  stage=[0, 0, 0, 0], buckets={}, seq=0, done=False, first_bad=0, last=None)
 
-    async def on_outcome(m):
+    def on_outcome(m):
         o = load(m.payload())
         now = time.time_ns()
         age = (now - o["ns"]) / 1e6
@@ -83,6 +80,27 @@ async def main(a):
             b[4 if o["canary"] else 5][o["code"]] += 1
         if o.get("bad") and not g["first_bad"]:
             g["first_bad"] = o["ns"]        # ground truth from the kit's injected defect, to time the decision
+
+    async def read(pids):
+        # Each partition in turn, from the start of the log (the guard rebuilds its view from it), then from its
+        # own position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        c = await own_client()
+        who = {p: Consumer.Single(f"{a.name}-{os.getpid()}-p{p}") for p in pids}
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, OUTCOMES, consumer=who[p], partition_id=p, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    for m in ms:
+                        on_outcome(m)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
 
     async def decide():
         while True:
@@ -158,7 +176,8 @@ async def main(a):
                     del seen[pid]
 
     async with verdicts:
-        await asyncio.gather(outcomes.consume_messages(on_outcome, asyncio.Event()), decide(), report())
+        parts = list(range(PARTITIONS[OUTCOMES]))
+        await asyncio.gather(decide(), report(), *(read(parts[r::a.readers]) for r in range(a.readers)))
 
 
 if __name__ == "__main__":
@@ -166,6 +185,9 @@ if __name__ == "__main__":
     p.add_argument("--url", default=DEFAULT_URL)
     p.add_argument("--name", default="guard")
     p.add_argument("--budget-ms", type=int, default=50, help="outcome-to-guard p99 budget for the lane")
+    p.add_argument("--readers", type=int, default=2, help="connections reading the payment-outcomes partitions")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--window", type=float, default=5, help="seconds of outcomes the ABORT test looks at")
     p.add_argument("--tick", type=float, default=0.2, help="seconds between decisions")
     p.add_argument("--min-n", type=int, default=100, help="canary payments needed in the window before an ABORT")

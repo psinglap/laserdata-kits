@@ -1,6 +1,7 @@
 """The feed's dedup service: viewed posts kept current from the lane, and every feed request filtered against them.
 
-Two readers, each on its own connection and consumer group:
+Two readers, each reading every partition of its topic directly on connections of its own (no consumer
+group: a group reader visits one partition per poll, so with 16 partitions a record waited for its turn):
   * viewed-posts (the lane): adds each flush's post IDs to the user's recently viewed set,
     ignoring any older or repeated sequence. Flush-to-dedup latency is timed here.
   * feed-requests: plays the dedup step in front of ranking. It drops candidates the user has
@@ -17,11 +18,10 @@ import gc
 import os
 import time
 from collections import defaultdict
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy
+from apache_iggy import Consumer, IggyClient, PollingStrategy
 
-from common import DEFAULT_URL, REQUESTS, STREAM, VIEWED, Window, ensure_topics, load
+from common import DEFAULT_URL, PARTITIONS, REQUESTS, STREAM, VIEWED, Window, ensure_topics, load
 
 
 async def main(a):
@@ -32,12 +32,6 @@ async def main(a):
 
     await ensure_topics(await own_client(), VIEWED, REQUESTS)
 
-    async def group(topic):
-        return await (await own_client()).consumer_group(
-            f"{a.name}-{topic}-{os.getpid()}", STREAM, topic, polling_strategy=PollingStrategy.First(), batch_length=5000,
-            auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
-
-    viewed, requests = await group(VIEWED), await group(REQUESTS)
     seen = {}                               # user -> [seq, when applied, viewed post IDs, last flush time]
     lat, stats = Window(), defaultdict(int)
     caught_up = [False]                     # a new reader first replays flushes made before it joined
@@ -105,9 +99,32 @@ async def main(a):
                   f"missing the last flush {late:.3f}%  repeats served {stats['repeats']:,}", flush=True)
             stats.clear()
 
-    stop = asyncio.Event()
-    await asyncio.gather(viewed.consume_messages(on_viewed, stop), requests.consume_messages(on_request, stop),
-                         sweep(), report())
+    async def read(topic, handler, pids):
+        # Each partition in turn, from the start of the log (state is rebuilt from it), then from this reader's
+        # own position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        c = await own_client()
+        who = {p: Consumer.Single(f"{a.name}-{topic}-{os.getpid()}-p{p}") for p in pids}
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, topic, consumer=who[p], partition_id=p, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    for m in ms:
+                        await handler(m)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
+
+    def readers(topic, handler):
+        parts = list(range(PARTITIONS[topic]))
+        return [read(topic, handler, parts[r::a.readers]) for r in range(a.readers)]
+
+    await asyncio.gather(*readers(VIEWED, on_viewed), *readers(REQUESTS, on_request), sweep(), report())
 
 
 if __name__ == "__main__":
@@ -115,5 +132,8 @@ if __name__ == "__main__":
     p.add_argument("--url", default=DEFAULT_URL)
     p.add_argument("--name", default="dedup")
     p.add_argument("--budget-ms", type=int, default=50, help="flush-to-dedup p99 budget for the lane")
+    p.add_argument("--readers", type=int, default=2, help="connections reading each topic's partitions")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--keep-s", type=float, default=600, help="seconds of views to hold before the database has them")
     asyncio.run(main(p.parse_args()))

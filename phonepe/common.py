@@ -10,7 +10,7 @@ STREAM = "payments-risk"
 VELOCITY = "payer-velocity"     # the lane: each completed payment's resulting velocity counts, keyed by payer
 CHECKS = "risk-checks"          # a risk check on a payer's next payment, which must already count the last one
 EVENTS = "app-events"           # a heavy, latency-tolerant analytics stream on the same broker
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: small writes go out at once
 PARTITIONS = {VELOCITY: 16, CHECKS: 16, EVENTS: 32}
 
 # Velocity windows the kit keeps per payer. Illustrative: PhonePe does not publish its features;
