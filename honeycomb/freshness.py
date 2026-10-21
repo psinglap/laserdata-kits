@@ -1,7 +1,8 @@
 """The freshness service heartbeat triggers ask before they page, fed by the ingest freshness lane.
 
-Reads the freshness lane (receipts and Retriever progress) on its own connection and consumer group, and keeps
-for every dataset two times: when the ingest service last enqueued a batch for it, and the newest of its batches that
+Reads every partition of the freshness lane (receipts and Retriever progress) directly, on --readers
+connections of its own, from the start of the retained log and then from its own position, and keeps for
+every dataset two times: when the ingest service last enqueued a batch for it, and the newest of its batches that
 Retriever has applied on every Kafka partition it went to (so it is queryable). Every --eval-every seconds,
 it answers each dataset's heartbeat:
 
@@ -14,7 +15,7 @@ it answers each dataset's heartbeat:
 Each verdict change goes to heartbeat-verdicts in one batch every 10 ms, from its own task, never from the
 read loop, so ingest.py can check it against the truth. Receipts carry the dataset's sequence, so a
 replayed or repeated receipt changes nothing, and a restarted service rebuilds every dataset from the
-retained lane: it holds nothing that the log does not.
+retained lane: it holds nothing that the log does not, and stores no offsets on the broker.
 
 Prints receipt-to-freshness p50/p99/p99.9 every second, with PASS/FAIL against --budget-ms.
 """
@@ -24,9 +25,8 @@ import gc
 import os
 import time
 from collections import defaultdict, deque
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy, SendMessage
+from apache_iggy import Consumer, IggyClient, PollingStrategy, SendMessage
 
 from common import DEFAULT_URL, LANE, PARTITIONS, STREAM, VERDICTS, Stalls, Window, ensure_topics, load, msg
 
@@ -41,10 +41,6 @@ async def main(a):
 
     await ensure_topics(await own_client(), LANE, VERDICTS)
 
-    lane = await (await own_client()).consumer_group(
-        f"{a.name}-{os.getpid()}", STREAM, LANE, polling_strategy=PollingStrategy.First(),   # rebuild from the log
-        batch_length=5000, auto_commit=AutoCommit.Interval(timedelta(seconds=1)),          # offsets once a second
-        poll_interval=timedelta(microseconds=500))
     out = await (await own_client()).producer(STREAM, VERDICTS, topic_partitions_count=PARTITIONS[VERDICTS])
 
     last_seq, last_rx, queryable = {}, {}, {}   # dataset -> receipt sequence, last enqueued (ns), newest queryable (ns)
@@ -65,7 +61,7 @@ async def main(a):
             stats["replayed"] += 1
             stats["max_age"] = max(stats["max_age"], age)
 
-    async def on_message(m):
+    def on_message(m):
         d = load(m.payload())
         timed(d)
         if "ds" not in d:                       # Retriever progress for one Kafka partition
@@ -87,6 +83,27 @@ async def main(a):
             queryable[k] = max(queryable[k], d["ns"])
         else:
             pending.setdefault(k, {}).setdefault(d["kp"], deque()).append((d["off"], d["ns"]))
+
+    async def read(pids):
+        # Each partition in turn, from the start of the log (state is rebuilt from it), then from our own
+        # position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        c = await own_client()
+        who = {p: Consumer.Single(f"{a.name}-{os.getpid()}-p{p}") for p in pids}
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, LANE, consumer=who[p], partition_id=p, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    for m in ms:
+                        on_message(m)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
 
     def evaluate(keys, now):
         for k in keys:
@@ -152,7 +169,8 @@ async def main(a):
                   f"{stalls.read()}", flush=True)
             stats.clear()
 
-    await asyncio.gather(lane.consume_messages(on_message, asyncio.Event()),
+    parts = list(range(PARTITIONS[LANE]))
+    await asyncio.gather(*(read(parts[r::a.readers]) for r in range(a.readers)),
                          heartbeats(), sender(), report_line(), stalls.watch())
 
 
@@ -164,5 +182,8 @@ if __name__ == "__main__":
     p.add_argument("--heartbeat-s", type=float, default=60, help="heartbeat window: no data for this long pages")
     p.add_argument("--behind-s", type=float, default=5,
                    help="a batch not queryable after this long means Retriever is behind")
+    p.add_argument("--readers", type=int, default=2, help="connections reading the lane's partitions")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--eval-every", type=float, default=1.0, help="seconds between heartbeat checks per dataset")
     asyncio.run(main(p.parse_args()))
