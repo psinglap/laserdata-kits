@@ -11,7 +11,7 @@ Rules are fixed before any result exists. If Kafka wins a step, that row is publ
 | Message size | ~200 B per report on the lane · ~16 KB per full report next door | Vehicle, sequence, the app signals' resulting values, timestamp. The full report stands in for 5,500+ signals. |
 | Rate | 150K → 500K vehicles, a report every 5 s each (30K → 100K reports/s) | "Over 150,000 vehicles stream 5,500+ signals every five seconds" (RV Tech, 2025), and growing with R2. |
 | Partitions | 32 on the lane, keyed by vehicle | A vehicle's reports are applied in order; the latest-state service scales by partition. |
-| Readers | 1 → 8 latest-state workers, one consumer group | Each worker owns its vehicles' partitions; offsets stored once a second. |
+| Readers | 1 → 8 latest-state workers, each reading its own partitions directly | Each worker owns its vehicles' partitions; offsets stored at most once a second. |
 | Durability | Iggy `replicated` × 3 · Kafka `acks=all`, RF 3 | State the owner acts on (locked, charging) is not dropped. |
 | Kafka tuning | `linger.ms=0`, tuned fetch settings, same region and instance family | Kafka on its best latency settings, not the bulk path's `linger.ms=100`. |
 | Peak | 2× vehicles awake for 10 min | Evening plug-in and morning departure. |

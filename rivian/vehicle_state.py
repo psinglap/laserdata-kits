@@ -1,6 +1,9 @@
 """The latest-state service the app reads, fed by the vehicle state lane.
 
-Reads app-vehicle-state on its own connection and consumer group and keeps, for every vehicle, the newest
+Reads every partition of app-vehicle-state directly, on --readers connections of its own, tracking its own
+position from the start of the retained log (no consumer group: a group reader visits one partition per poll,
+so with 16 partitions a report waited for its partition's turn and a busy host pushed the tail toward the
+budget). It keeps, for every vehicle, the newest
 value of every signal the app shows (a stand-in for the latest-state cache behind your telematics API).
 Each report carries the vehicle's sequence and resulting values, so a replayed or repeated report is
 recognised and changes nothing, and a restarted service rebuilds every vehicle's state from the retained
@@ -16,13 +19,10 @@ Prints report-to-state p50/p99/p99.9 every second, with PASS/FAIL against --budg
 import argparse
 import asyncio
 import gc
-import os
 import random
 import time
 from collections import defaultdict, deque
-from datetime import timedelta
-
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy, SendMessage
+from apache_iggy import Consumer, IggyClient, PollingStrategy, SendMessage
 
 from common import DEFAULT_URL, PARTITIONS, READS, STATE, STREAM, Stalls, Window, ensure_topics, load, msg
 
@@ -33,11 +33,8 @@ async def main(a):
         await c.connect()
         return c
 
-    await ensure_topics(await own_client(), STATE, READS)
-    reports = await (await own_client()).consumer_group(
-        f"{a.name}-{os.getpid()}", STREAM, STATE, polling_strategy=PollingStrategy.First(),   # rebuild from the log
-        batch_length=5000, auto_commit=AutoCommit.Interval(timedelta(seconds=1)),           # offsets once a second
-        poll_interval=timedelta(microseconds=500))
+    admin = await own_client()
+    await ensure_topics(admin, STATE, READS)
     out = await (await own_client()).producer(STREAM, READS, topic_partitions_count=PARTITIONS[READS])
     state = {}                              # vehicle -> newest report applied (the app's view)
     keys = []                               # every vehicle seen, for app opens on any vehicle
@@ -46,9 +43,9 @@ async def main(a):
     caught_up = [False]                     # a new reader first replays the reports retained on the topic
     gc.freeze()                             # keep start-up objects out of the collector's way
 
-    async def on_report(m):
+    def on_report(m, now):
         d = load(m.payload())
-        age = (time.time_ns() - d["ns"]) / 1e6
+        age = (now - d["ns"]) / 1e6
         if caught_up[0]:
             lat.add(age)
         else:                               # still replaying: track the oldest report seen this second
@@ -67,6 +64,28 @@ async def main(a):
             stats["changes"] += 1
             if caught_up[0]:
                 changed.append(k)
+
+    async def read(pids):
+        # Each partition in turn, from the start of the retained log (state is rebuilt from it), then from our
+        # own position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        c = await own_client()
+        who = {p: Consumer.Single(f"{a.name}-p{p}") for p in pids}
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, STATE, consumer=who[p], partition_id=p, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    now = time.time_ns()
+                    for m in ms:
+                        on_report(m, now)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
 
     async def app_opens():
         # One batch of app opens every 10 ms, sized to what the tick owes, sent from this task only.
@@ -111,8 +130,8 @@ async def main(a):
                   f"{stalls.read()}", flush=True)
             stats.clear()
 
-    await asyncio.gather(reports.consume_messages(on_report, asyncio.Event()), app_opens(), report_line(),
-                         stalls.watch())
+    parts = list(range((await admin.get_topic(STREAM, STATE)).partitions_count))
+    await asyncio.gather(app_opens(), report_line(), stalls.watch(), *(read(parts[r::a.readers]) for r in range(a.readers)))
 
 
 if __name__ == "__main__":
@@ -120,5 +139,8 @@ if __name__ == "__main__":
     p.add_argument("--url", default=DEFAULT_URL)
     p.add_argument("--name", default="vehicle-state")
     p.add_argument("--budget-ms", type=int, default=50, help="report-to-state p99 budget for the lane")
+    p.add_argument("--readers", type=int, default=2, help="connections reading the app-vehicle-state partitions")
+    p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
+    p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--reads-per-s", type=float, default=2000, help="app opens a second")
     asyncio.run(main(p.parse_args()))
