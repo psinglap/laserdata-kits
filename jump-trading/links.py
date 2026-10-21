@@ -3,7 +3,7 @@
 Plays --links links in one process. Each link publishes a sample to link-samples every --sample-ms, keyed by link,
 with its RSSI, SNR and BER and the link's sample sequence. Now and then a link fades: SNR and RSSI drop and BER
 climbs for a while, then the link comes back. Fade durations are illustrative: a share are short bursts
-(80-400 ms), the rest last seconds to minutes (set them to yours in fade_seconds()). --storm brings extra fades
+(80-400 ms), the rest 3-90 s (set them to yours in fade_seconds()). --storm brings extra fades
 forward for a while, the way weather crosses many links at once.
 
 --consumers readers play the services that act on link-alerts (network console, on-call, status board), each on
@@ -33,11 +33,11 @@ from common import (ALERTS, DEFAULT_URL, DEGRADED, PARTITIONS, RECOVERED, SAMPLE
 CONSUMERS = ["network-console", "on-call", "status-board", "capacity-planning", "reports"]
 
 
-def fade_seconds(short_share: float):
+def fade_seconds(short_share: float, long_max_s: float):
     """How long a fade lasts (illustrative; set it to yours): short bursts, or longer weather fades."""
     if random.random() < short_share:
         return random.uniform(0.08, 0.4)
-    return random.uniform(3, 90)
+    return random.uniform(min(3, long_max_s / 2), long_max_s)
 
 
 class Link:
@@ -141,7 +141,7 @@ async def main(a):
                     x = links[i]
                     x.seq += 1
                     if not x.fading(now) and now >= x.nxt:      # a fade starts with this sample
-                        held = fade_seconds(a.short_share)
+                        held = fade_seconds(a.short_share, a.long_max_s)
                         x.fade_end, x.ep, x.depth = now + held, x.seq, random.uniform(10, 25)
                         x.nxt = x.fade_end + random.expovariate(1 / a.fade_every_s)
                         fades[(x.l, x.seq)] = held
@@ -192,6 +192,7 @@ if __name__ == "__main__":
     p.add_argument("--sample-ms", type=float, default=20, help="milliseconds between samples per link")
     p.add_argument("--fade-every-s", type=float, default=600, help="mean seconds between fades per link")
     p.add_argument("--short-share", type=float, default=0.3, help="share of fades that are short bursts (80-400 ms)")
+    p.add_argument("--long-max-s", type=float, default=90, help="longest weather fade, seconds")
     p.add_argument("--consumers", type=int, default=3, help="services reading link-alerts, each with its own reader")
     p.add_argument("--poll-ms", type=float, default=1, help="consumer wait between polls when nothing is waiting")
     p.add_argument("--compare-ms", type=float, default=150,

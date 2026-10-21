@@ -10,11 +10,12 @@ for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; 
 pip install -q -r requirements.txt
 python -m py_compile common.py link_rules.py links.py slow_reader.py log_flood.py redpanda_bridge.py
 # The rules start first and create the topics; the links and the neighbours follow.
-# 50 links, a sample every 20 ms each (about 2,500 samples/s), a fade every 12 s per link;
+# 50 links, a sample every 20 ms each (about 2,500 samples/s), a fade every 20 s per link, weather fades up to 8 s
+# (shortened so fades keep starting in a one-minute run);
 # a slow reader on the lane at 1,000 samples/s from second 12, and 2 MB/s of log shipping from second 20.
 timeout 78 python -u link_rules.py > rules.log 2>&1 &
 sleep 3
-timeout 72 python -u links.py --links 50 --sample-ms 20 --fade-every-s 12 --consumers 3 > links.log 2>&1 &
+timeout 72 python -u links.py --links 50 --sample-ms 20 --fade-every-s 20 --long-max-s 8 --consumers 3 > links.log 2>&1 &
 timeout 70 python -u slow_reader.py --rate 1000 --at 12 --duration 55 > slow.log 2>&1 &
 timeout 70 python -u log_flood.py --mbps 2 --at 20 --duration 35 > logs.log 2>&1 &
 wait || true

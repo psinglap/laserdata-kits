@@ -9,6 +9,7 @@ this reader's lag grows.
 import argparse
 import asyncio
 import gc
+import os
 import time
 from datetime import timedelta
 
@@ -48,9 +49,9 @@ async def main(a):
             st["n"] = 0
         print("[slow-reader] done", flush=True)
 
-    task = asyncio.ensure_future(reader.consume_messages(on_sample, asyncio.Event()))
+    asyncio.ensure_future(reader.consume_messages(on_sample, asyncio.Event()))
     await report()
-    task.cancel()
+    os._exit(0)                             # the consume loop has a callback mid-sleep; exit without waiting for it
 
 
 if __name__ == "__main__":
