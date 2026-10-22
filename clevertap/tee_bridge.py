@@ -61,7 +61,7 @@ async def main(a):
             await queue.put(line)
 
     async def sender():
-        done = False
+        done, sent = False, 0
         async with producer:
             while not done:
                 lines = [await queue.get()]
@@ -85,6 +85,8 @@ async def main(a):
                 # One batch per partition, all sent at once, so a user's records stay in order.
                 await asyncio.gather(*(producer.send_with_partitioning(ms, Partitioning.partition_id(p))
                                        for p, ms in groups.items()))
+                sent += sum(len(ms) for ms in groups.values())
+        print(f"[bridge] input ended: {sent:,} records published to {OUTCOMES}", flush=True)
 
     await asyncio.gather(reader(), sender())
 

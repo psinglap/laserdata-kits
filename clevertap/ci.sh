@@ -26,7 +26,7 @@ timeout 45 python -u learner.py --name hold --hold-ms 1000 > hold.log 2>&1 &
 sleep 3
 timeout 40 python -u apps.py --users 200000 --outcomes-per-s 1500 --surge 1 > apps-hold.log 2>&1 &
 wait || true
-# The bridge: three records in the Upload Events API shape, piped in, are mapped and published without error.
+# The bridge: three records in the Upload Events API shape, piped in; two map to the lane (App Launched does not).
 printf '%s\n' '{"identity":"bridge-check","type":"event","evtName":"Notification Sent","evtData":{"action":"cart_reminder_push"}}' \
   '{"identity":"bridge-check","type":"event","evtName":"Charged","evtData":{"Amount":499}}' \
   '{"identity":"bridge-check","type":"event","evtName":"App Launched"}' | timeout 20 python -u tee_bridge.py > bridge.log 2>&1
@@ -35,6 +35,7 @@ echo "--- learner.log";   tail -n 8 learner.log
 echo "--- history.log";   head -n 2 history.log; tail -n 2 history.log
 echo "--- hold.log";      tail -n 4 hold.log
 echo "--- bridge.log";    cat bridge.log
+grep -q "2 records published" bridge.log || { echo "the bridge did not publish the two mapped records"; exit 1; }
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" learner.log | cut -c1-160 || true
 # Skip a 10 s warm-up while topics come online; a shared CI runner may blip, so require 95% of seconds to pass.
 steady=$(grep -E '\[learner\] +[1-9][0-9,]* outcomes/s' learner.log | tail -n +11 || true)
