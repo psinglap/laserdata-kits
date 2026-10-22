@@ -74,8 +74,17 @@ one to two seconds MakeMyTrip saw with micro-batch, so you can see how many taps
 
 **What the numbers mean.** The kit times each search from the moment `app.py` sends it to the moment
 `recents.py` has folded it into the list, through Python clients, on whatever machine you run it on. It
-does not include writing the list to Aerospike or Redis, or the app's own request. CI results are added
-here after the green runs.
+does not include writing the list to Aerospike or Redis, or the app's own request.
+
+**On a real Apache Iggy 0.9.0 broker in CI** (shared 2-vCPU GitHub runner, broker and every script on one
+box, 1,500 searches a second over 200,000 travellers, 15% B2B, on the 64-partition lane, with a 2× surge and a
+1 MB/s clickstream next door), over two green runs on the final code: search-to-list p50 6.0–7.9 ms, p99
+10.5–15.4 ms, p99.9 12.5–16.9 ms (medians of the per-second figures); worst second in the surge p99 19.8–25.2 ms;
+no second over the 50 ms budget. Of about 57,000 search-bar taps per run, none was served without the
+traveller's last search. With every search applied 1 s late (the what-if), 25–26% of taps were served a stale
+list, and in about 6,100–6,500 taps per 33 s the hotel just searched was missing from the list. This is the
+end-to-end path through Python clients at reduced scale, not the broker's own latency, which is measured with
+`iggy-bench` on dedicated machines (`bench/PLAN.md`).
 
 | File | What it is |
 |---|---|
