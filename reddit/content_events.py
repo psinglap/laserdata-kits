@@ -122,6 +122,6 @@ if __name__ == "__main__":
     p.add_argument("--sigma", type=float, default=0.5, help="spread of inference delay (lognormal sigma)")
     p.add_argument("--max-infer-s", type=float, default=4.0, help="cap on a normal inference delay")
     p.add_argument("--partitions", type=int, default=32, help="partitions for new lane topics")
-    p.add_argument("--tick-ms", type=float, default=20)
+    p.add_argument("--tick-ms", type=float, default=50, help="write a batch per partition this often")
     p.add_argument("--seed", type=int, default=7)
     asyncio.run(main(p.parse_args()))

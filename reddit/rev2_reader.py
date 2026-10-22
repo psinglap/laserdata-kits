@@ -115,7 +115,7 @@ if __name__ == "__main__":
     p.add_argument("--partitions", type=int, default=32, help="partitions for new lane topics")
     p.add_argument("--readers", type=int, default=1, help="connections reading the enriched topic")
     p.add_argument("--budget-ms", type=float, default=100, help="p99 budget, last signal written to REV2")
-    p.add_argument("--poll-ms", type=float, default=5)
+    p.add_argument("--poll-ms", type=float, default=10, help="wait between rounds when nothing more is waiting")
     p.add_argument("--batch", type=int, default=1000)
     p.add_argument("--commit-s", type=float, default=1)
     p.add_argument("--remember-s", type=float, default=120, help="how long a content ID is remembered for repeats")
