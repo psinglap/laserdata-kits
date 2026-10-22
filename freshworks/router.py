@@ -60,7 +60,7 @@ class View:
         for k in self.ready.get(g, ()):
             v = self.ag[k]
             load, cap = (v[3], v[4]) if ch == "ticket" else (v[5], v[6])
-            load += max(0, sent.get(k, 0) - v[8])     # plus assignments the product has not reported yet
+            load += max(0, sent.get(k, v[8]) - v[8])  # plus assignments the product has not reported yet
             if load >= cap:
                 continue                 # at capacity: not eligible
             key = (load / cap, last.get(k, 0))        # most room first, then the longest since an assignment
@@ -77,7 +77,7 @@ async def main(a):
     start_ns = time.time_ns()
 
     view, stale = View(), [View()]
-    sent = defaultdict(int)              # agent -> assignments this node sent
+    sent = {}                            # agent -> assignments the agent will have received once ours land
     last = {}                            # agent -> when this node last assigned to it
     outbox = []                          # assignments waiting for the sender task
     lat, st, run = Window(), defaultdict(int), defaultdict(int)
@@ -141,7 +141,8 @@ async def main(a):
         k = view.pick(r["g"], r["ch"], sent, last)
         alt = stale[0].pick(r["g"], r["ch"], sent, last)
         if k:
-            sent[k] += 1
+            # Count from the agent's reported total, so a restarted node's count lines up with the product's.
+            sent[k] = sent.get(k, view.ag[k][8]) + 1
             last[k] = time.monotonic()
             st["routed"] += 1
         else:
