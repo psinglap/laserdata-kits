@@ -64,19 +64,21 @@ had no planted incident; it should stay 0.
 **What the numbers mean.** The kit times each outcome from the moment `delivery.py` creates it to the moment
 `alerts.py` has counted it, and each alert from `alerts.py` to the alert service, through Python clients, on
 whatever machine you run it on. On a shared 2-vCPU CI runner with the broker and all scripts on one box, at
-reduced scale (3,000 attempts a second over 3,000 workspace destinations and 4 delivery workers), three green runs
-held outcome-to-check p50 3.7–4.9 ms, p99 6.6–8.8 ms and p99.9 7.2–9.6 ms (every one of 62 steady-state seconds per
+reduced scale (3,000 attempts a second over 3,000 workspace destinations and 4 delivery workers), five green runs
+held outcome-to-check p50 3.7–6.4 ms, p99 6.6–11.9 ms and p99.9 7.2–13.0 ms (every one of 62 steady-state seconds per
 run inside 100 ms), with the check reading the 16 outcome partitions directly. The six planted incidents per run
-(on workspace destinations carrying 17–107 attempts a second) reached the alert service a median 630–684 ms after
+(on workspace destinations carrying 17–107 attempts a second) reached the alert service a median 597–684 ms after
 their first failed attempt (slowest 1.1–1.8 s), after 19–20 failed attempts, and the alert service had each alert
-a median 2.2–2.6 ms after the check published it. No workspace destination without an incident alerted; five of
+a median 2.0–2.6 ms after the check published it. No workspace destination without an incident alerted; five of
 six incidents per run were RESOLVED before the run ended. With 2 MB/s of 5 KB event payloads on the same broker,
-the lane's p99 moved by 0.1 ms or less. That is the end-to-end loop through this demo code, not the broker alone.
+the lane's p99 moved by 0.3 ms or less. That is the end-to-end loop through this demo code, not the broker alone.
 The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines. The
 destinations in the kit are simulated; real partner APIs add their own time. CI runs:
 https://github.com/psinglap/laserdata-kits/actions/runs/39870235847,
 https://github.com/psinglap/laserdata-kits/actions/runs/39870455585,
-https://github.com/psinglap/laserdata-kits/actions/runs/39870681188
+https://github.com/psinglap/laserdata-kits/actions/runs/39870681188,
+https://github.com/psinglap/laserdata-kits/actions/runs/39871096119,
+https://github.com/psinglap/laserdata-kits/actions/runs/39871318818 (the last two on the final code)
 
 | File | What it is |
 |---|---|
