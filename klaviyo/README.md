@@ -69,14 +69,15 @@ fire-and-forget API caller waits for when a publish fails.
 to the moment a retrier has it, through Python clients, on whatever machine you run it on; that includes
 the retrier's 5 ms idle poll. On a shared 2-vCPU GitHub runner, with the broker and four Python processes
 on one box, 1% of 6,000 events a second failing and then 50% for 30 s (3,000 failed writes a second), and
-4 MB/s of S3 replay next door, three CI runs held capture-to-retry p50 3.7 to 5.2 ms, p99 7.1 to 8.2 ms and
-p99.9 7.1 to 8.2 ms (medians per second) over 64 to 65 steady-state seconds per retrier; in the surge
-seconds the median p99 was 7.7 to 11.0 ms (6.0 to 7.5 ms otherwise). Ten seconds in 387 went over the
-100 ms budget (worst 350 ms); they hit both retriers in the same seconds, and the worst ones show in the
-publisher's capture ack too, so the shared runner or broker paused, not one reader. The capture write's ack p99
-had a median of 1.5 to 2.2 ms per second (worst second 7.8 to 344 ms). The runs captured 92,759, 92,099
-and 92,699 failed writes and lost none: 92,578, 91,945 and 92,538 were re-published, 181, 154 and 161
-went to the DLQ (exactly the events with payloads MSK rejects), and every P10
+4 MB/s of S3 replay next door, three CI runs held capture-to-retry p50 5.2 to 5.8 ms, p99 7.8 to 8.8 ms and
+p99.9 7.8 to 8.8 ms (medians per second) over 64 to 65 steady-state seconds per retrier, every one inside the
+100 ms budget (worst second 12 to 14 ms); in the surge seconds the median p99 was 11.0 to 12.0 ms (7.2 to
+7.8 ms otherwise). Earlier runs had rare seconds of up to 350 ms on both retriers at once, 35 and 67 s into the
+replay: the runner's kernel writing about 30 s of the replay's dirty pages to disk in one burst. CI now has
+the runner flush dirty pages continuously (`vm.dirty_background_bytes` 32 MB, 2 s expiry), as a streaming host
+is tuned; on a Linux box of your own, set the same before the replay test. The capture write's ack p99 had a
+median of 1.4 to 2.2 ms per second (worst second 6.0 to 11.6 ms). Each run captured 92,759 failed writes and
+lost none: 92,558, 92,597 and 92,576 were re-published, 201, 162 and 183 went to the DLQ (exactly the events with payloads MSK rejects), and every P10
 event was re-published inside 5 seconds of its first failure. That is the end-to-end lane through this
 demo code at a reduced scale, not the broker alone. The broker's own tail latency, the surge at full size
 and the cost to keep the lane ready are measured with `iggy-bench` on dedicated machines (`bench/PLAN.md`).

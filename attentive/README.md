@@ -71,13 +71,12 @@ writes it to the moment its decision worker has decided it, through Python clien
 machine you run it on. On a shared GitHub runner, with the broker and five Python processes on one
 box, at 3,000 shopping events a second from 200,000 subscribers on 16 partitions (about 230 sessions
 a second with two or more triggers, 6,000 events a second for the first 15 s), two workers, and
-10,000 campaign texts a second next door from second 30, two CI runs held event-to-decision p50 6.3
-to 7.0 ms, p99 11.7 to 14.2 ms and p99.9 12.3 to 15.2 ms (medians per second) over 70 steady-state
-seconds per worker, with median p99 the same before and during the campaign blast. One run had every
-second inside the 50 ms budget (worst second 23 ms); the other had 2 to 3 seconds out of 70 over it,
-the same seconds on both workers (worst 449 ms), which points at the runner or the broker rather than
-the workers. Event to send-intent, through the worker and its 20 ms send batches to the send side,
-held p50 24 to 26 ms and p99 41 to 44 ms. Each worker queued about 140 texts a second and held about
+10,000 campaign texts a second next door from second 30, three CI runs held event-to-decision p50
+6.1 to 8.4 ms, p99 11.2 to 15.1 ms and p99.9 11.7 to 15.9 ms (medians per second) over 70 steady-state
+seconds per worker, with median p99 the same before and during the campaign blast. Two runs had every
+second inside the 50 ms budget (worst second 17 to 19 ms); the third had 2 seconds out of 70 over it, the
+same seconds on both workers (worst 90 ms). Event to send-intent, through the worker and its 20 ms send
+batches to the send side, held p50 24 to 27 ms and p99 40 to 45 ms. Each worker queued about 140 texts a second and held about
 190 repeat triggers a second; across about 26,500 subscribers texted per run, the send side counted 0
 duplicate texts and 0 subscribers decided by two workers, and no event was out of order, missing or
 on another partition. Checkout reminders stayed at 0 because every checkout in the kit's sessions
@@ -87,6 +86,10 @@ Earlier versions of the worker stored its offset on the broker on every poll and
 texts from inside the read loop. They passed on some runners and missed the budget in most seconds on
 others (p50 still 6 to 10 ms, p99 70 to 470 ms, both workers in step). The workers now store offsets
 once a second and send from their own task in 20 ms batches; we have not proven which change mattered.
+Before that, rare failing runs had seconds of 200 to 800 ms on both workers 33 to 35 s after the campaign
+blast began: the runner's kernel writing about 170 MB of the blast's dirty pages to disk in one burst. CI
+now has the runner flush dirty pages continuously (`vm.dirty_background_bytes` 32 MB, 2 s expiry), as a
+streaming host is tuned; on a Linux box of your own, set the same before the campaign test.
 All of this is the end-to-end lane through this demo code, not the broker alone. The broker's own tail
 latency and cost per billion events are measured with `iggy-bench` on dedicated machines
 (`bench/PLAN.md`).
