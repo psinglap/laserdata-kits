@@ -66,17 +66,18 @@ score crossed into Sev2, set by the scoring and how many heartbeats the pair see
 moment `qos.py` has applied it, and each signal from the moment the health check sends it to the moment
 `routing.py` has applied it, through Python clients, on whatever machine you run it on. On a shared GitHub
 runner, with the broker and four Python processes on one box, two green CI runs at 800 heartbeats a
-second of ~1.1 KB (2.5× for 15 s as the death overs) held heartbeat-to-check p50 12.6 to 12.7 ms, p99
-25.4 to 25.6 ms and p99.9 27.1 to 27.3 ms (median per second over 63 steady-state seconds each, worst
-second's p99 26.8 to 29.2 ms, none over the 100 ms budget). Through the death overs (2,000 heartbeats a
-second) the median per-second p99 was 24.0 to 24.2 ms, worst 29.2 ms. Check-to-routing ran at about 120
-signals a second (every pair's state every second, plus every change): p50 10.3 to 10.7 ms, p99 16.2 to
-17.6 ms, worst second 22.7 ms. In each run four injected incidents reached routing 2.8 to 9.4 ms after the
-flag; of about 37,000 plays per run, about 800 were steered to a healthy CDN, and 0 and 1 were sent to a
-flagged CDN before its signal arrived. Full 7.5 KB heartbeats ran next door at 2 MB/s for 34 s. That is the end-to-end lane through
+second of ~1.1 KB (2.5× for 15 s as the death overs) held heartbeat-to-check p50 4.3 to 6.8 ms, p99
+8.0 to 13.4 ms and p99.9 9.3 to 15.2 ms (median per second over 62 steady-state seconds each, worst
+second's p99 9.8 to 16.9 ms, none over the 100 ms budget). Through the death overs (2,000 heartbeats a
+second) the median per-second p99 was 9.3 to 16.2 ms, worst 16.9 ms. Check-to-routing ran at about 120
+signals a second (every pair's state every second, plus every change): p50 5.1 to 7.3 ms, p99 6.1 to
+9.0 ms, worst second 11.3 ms. Both readers poll every partition directly rather than through a consumer
+group. In each run four injected incidents reached routing 2.8 to 4.6 ms after the flag; of about 36,000
+plays per run, 810 to 840 were steered to a healthy CDN, and 0 and 2 were sent to a flagged CDN before its
+signal arrived. Full 7.5 KB heartbeats ran next door at 2 MB/s for 34 s. That is the end-to-end lane through
 this demo code, not the broker alone; the broker's own tail latency is measured with `iggy-bench` on
 dedicated machines (`bench/PLAN.md`). The kit's scoring (weights, thresholds, a 40-heartbeat window) is
-illustrative, so its detection windows of 0.2 to 0.8 s say nothing about yours.
+illustrative, so its detection windows of 0.3 to 0.8 s say nothing about yours.
 
 | File | What it is |
 |---|---|
