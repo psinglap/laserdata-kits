@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        account: [zepto, swiggy, meesho, eternal, rapido, porter, groww, phonepe, razorpay, zerodha, juspay, jiohotstar, sharechat, zee5, moengage, signoz, dream11, the-trade-desk, magnite, braze, pubmatic, klaviyo, attentive, cursor, character-ai, deepgram, vapi, stubhub, doordash, motive, rivian, robinhood, kraken, jump-trading, honeycomb, posthog, sentry, atlassian, netflix, disney, pinterest, discord, conviva, reddit, roblox]
+        account: [zepto, swiggy, meesho, eternal, rapido, porter, groww, phonepe, razorpay, zerodha, juspay, jiohotstar, sharechat, zee5, moengage, signoz, dream11, the-trade-desk, magnite, braze, pubmatic, klaviyo, attentive, cursor, character-ai, deepgram, vapi, stubhub, doordash, motive, rivian, robinhood, kraken, jump-trading, honeycomb, posthog, sentry, atlassian, netflix, disney, pinterest, discord, conviva, reddit, roblox, scopely]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
