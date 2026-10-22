@@ -72,11 +72,14 @@ async def main(a):
         right = max(0.2, 0.9 - 0.045 * level)
         close_at = timer * random.uniform(0.6, 0.9) if random.random() < a.cut_share else timer
         who = random.sample(range(a.players), int(a.players * a.answer_share))
-        plan = []                                       # (seconds after open, player, option)
+        plan, late = [], []                             # (seconds after open, player, option)
         for i in who:
             t = random.uniform(a.react_s, FAST_S) if random.random() < a.fast_share else random.uniform(FAST_S, timer)
             opt = answer if random.random() < right else random.choice([o for o in "ABCD" if o != answer])
-            plan.append((t, player_id(i), opt))
+            if random.random() < a.late_share:          # locks near the end, but reaches the API after the close
+                late.append((random.uniform(0.05, a.late_window_s), player_id(i), opt))
+            else:
+                plan.append((t, player_id(i), opt))
         plan.sort(reverse=True)                         # pop from the end: earliest first
         t0 = time.monotonic()
         await show_p.send([SendMessage(msg(kind="open", q=q, level=level + 1, points=POINTS[level], timer_s=timer,
@@ -100,9 +103,10 @@ async def main(a):
         state["phase"] = "closed"
         stats["cut"] += close_at < timer
         # Players who had not locked by the close see the timer end in the app. A few locks were already on the
-        # way and reach the answer API after the close: the scorer must reject them.
-        late = sorted(((random.uniform(0.05, a.late_window_s), p, o) for _, p, o in plan[:int(len(who) * a.late_share)]),
-                      reverse=True)
+        # way and reach the answer API after the close (late_share of players, and of those cut off when the next
+        # question is asked early): the scorer must reject them.
+        late += [(random.uniform(0.05, a.late_window_s), p, o) for _, p, o in plan[:int(len(plan) * a.late_share)]]
+        late.sort(reverse=True)
         t1 = due = time.monotonic()
         while late:
             el = time.monotonic() - t1

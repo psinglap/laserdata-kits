@@ -19,7 +19,7 @@ python -m py_compile common.py episode.py scorer.py engagement_flood.py kinesis_
 timeout 82 python -u scorer.py > scorer.log 2>&1 &
 sleep 3
 timeout 75 python -u episode.py --players 30000 --answer-share 0.8 --timer-s 16 --reveal-gap-s 2 --next-gap-s 2 \
-  --cut-share 0.25 > episode.log 2>&1 &
+  --cut-share 0.5 > episode.log 2>&1 &
 timeout 72 python -u engagement_flood.py --mbps 1 --at 20 --duration 40 > engagement.log 2>&1 &
 # A second scorer joins mid-episode and rebuilds every score from the log.
 ( sleep 37; timeout 40 python -u scorer.py --name rebuild > rebuild.log 2>&1 ) &
