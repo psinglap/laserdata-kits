@@ -51,7 +51,7 @@ async def main(a):
     info = {app(i): wallet(i, a.apps, a.msgs_per_s, a.runway_s) for i in range(a.apps)}
     cats = list(CATEGORIES)
     cat_w = [CATEGORIES[c][0] for c in cats]
-    view = {n: {} for n in nodes}           # node -> {app: (state, decision seq)}
+    view = {n: {} for n in nodes}           # node -> {app: (state, time the wallet decided it)}
     seq = defaultdict(int)                  # (node, app) -> sequence
     tot = defaultdict(lambda: [0, 0.0, 0.0, 0.0])   # (node, app) -> [messages, gs fee, wa fee, credits]
     due_dlr = []                            # (due time, node, app, Meta fee): deliveries still to come
@@ -75,9 +75,9 @@ async def main(a):
             for m in ms:
                 d = load(m.payload())
                 v = view[n].get(d["a"])
-                if v and d["seq"] <= v[1]:
-                    continue                # older or repeated state: the newest wins
-                view[n][d["a"]] = (d["state"], d["seq"])
+                if v and d["ns"] <= v[1]:
+                    continue                # older or repeated state: the newest wins (also after a wallet restart)
+                view[n][d["a"]] = (d["state"], d["ns"])
                 if n == nodes[0]:           # payments watch send-00's view: a blocked app may top up
                     if d["state"] == "blocked" and info[d["a"]]["recharges"]:
                         recharge.setdefault(d["a"], time.monotonic() + a.recharge_s)
