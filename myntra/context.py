@@ -100,6 +100,9 @@ async def main(a):
     async def report():
         while True:
             await asyncio.sleep(1)
+            # Move what survived the last second (contexts, shoppers) out of the collector's reach, so a full
+            # collection never walks hundreds of thousands of long-lived objects and pauses the readers.
+            gc.freeze()
             if not caught_up[0]:
                 # caught up once a whole second of actions arrived inside the budget; partitions interleave,
                 # so one fresh action alone doesn't mean the replay is finished
@@ -115,7 +118,7 @@ async def main(a):
             print(f"[{a.name}] {r['n']:>7,} actions/s  action-to-context p50 {r['p50']:6.1f}ms  p99 {r['p99']:6.1f}ms  "
                   f"p99.9 {r['p999']:6.1f}ms  {ok} (<{a.budget_ms + a.hold_ms}ms)  shoppers in context {len(ctx):,}",
                   flush=True)
-            print(f"[type-ahead] requests {stats['requests']:,}  after an intent change {stats['moved']:,}  "
+            print(f"[type-ahead] requests {stats['requests']:,}  lead category changed {stats['moved']:,}  "
                   f"boosted without the last action {stale:.3f}%  wrong category boosted {stats['wrong']:,}", flush=True)
             stats.clear()
 

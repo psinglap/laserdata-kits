@@ -111,6 +111,9 @@ async def main(a):
     async def report():
         while True:
             await asyncio.sleep(1)
+            # Move what survived the last second (contexts, shoppers) out of the collector's reach, so a full
+            # collection never walks hundreds of thousands of long-lived objects and pauses the readers.
+            gc.freeze()
             phase = "surge" if stats["surge"] else "steady"
             n = sum(stats[k] for k in KINDS)
             print(f"[app] {n:>7,} shopper actions/s ({phase})  search {stats['search']:,}  view {stats['view']:,}  "

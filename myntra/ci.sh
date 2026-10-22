@@ -58,9 +58,9 @@ if peak:
     print("surge: %d s above 2,000 actions/s, median p99 %.1f ms, worst p99 %.1f ms" % (
         len(peak), st.median(nums(r"p99 +([0-9.]+)ms", peak)), max(nums(r"p99 +([0-9.]+)ms", peak))))
 stale = nums(r"without the last action ([0-9.]+)%", f)
-print("type-ahead requests: %d s checked, %.0f requests, %.0f after an intent change, boosted without the last "
+print("type-ahead requests: %d s checked, %.0f requests, %.0f where the last action changed the lead category, boosted without the last "
       "action: median %.3f%%, worst second %.3f%%, wrong category boosted %.0f" % (
-    len(f), sum(nums(r"requests ([0-9,]+)  after", f)), sum(nums(r"intent change ([0-9,]+)  boosted", f)),
+    len(f), sum(nums(r"requests ([0-9,]+)  after", f)), sum(nums(r"category changed ([0-9,]+)  boosted", f)),
     st.median(stale) if stale else float("nan"), max(stale) if stale else float("nan"),
     sum(nums(r"wrong category boosted ([0-9,]+)", f))))
 e = [l for l in open("clickstream.log") if re.search(r"\] +[1-9][0-9,]* msgs/s", l)]
