@@ -6,6 +6,7 @@ milliseconds, even at campaign peak. It runs beside your billing pipeline, so no
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.gupshup-kit
 - **One slide:** [`LaserData_Gupshup_AppWallets.pdf`](LaserData_Gupshup_AppWallets.pdf)
 
 ## Why this use case
