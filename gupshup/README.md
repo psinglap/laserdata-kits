@@ -56,17 +56,17 @@ They print a line a second:
 the moment `wallet.py` has applied it, and each wallet state from `wallet.py` to every send node, through
 Python clients, on whatever machine you run it on. On a shared 2-vCPU CI runner with the broker and all
 scripts on one box, at reduced scale (2,000 outbound messages/s, 1,000 apps, 4 send nodes, 15-second
-runway), three green runs held charge-to-wallet p50 4.8–7.8 ms and p99 8.6–14.6 ms (worst second
-12.3–18.4 ms; all 61 steady-state seconds inside 50 ms in every run), and state-to-send-nodes p50
-2.7–3.2 ms and p99 5.5–6.2 ms. With 2 MB/s of inbound messages on the same broker, the lane's p99 did not
-rise. Apps hit their overdraft 1,670–1,704 times, the send nodes refused 32,408–33,056 messages with 1003,
-1,341–1,369 top-ups unblocked them, 2,062–2,140 records sent twice were charged once, and 7–22 of about
-110,000 accepted messages (0.006–0.020%) were accepted past the overdraft. That is the end-to-end loop
+runway), three green runs held charge-to-wallet p50 3.7–4.1 ms and p99 6.8–7.3 ms (worst second
+9.0–14.9 ms; all 62 steady-state seconds inside 50 ms in every run), and state-to-send-nodes p50
+2.5 ms and p99 4.7–5.0 ms. With 2 MB/s of inbound messages on the same broker, the lane's p99 moved by
+0.2 ms or less. Apps hit their overdraft 1,691–1,707 times, the send nodes refused 32,401–33,080 messages with 1003,
+1,359–1,365 top-ups unblocked them, 2,079–2,126 records sent twice were charged once, and 3–5 of about
+110,000 accepted messages (0.003–0.005%) were accepted past the overdraft. That is the end-to-end loop
 through this demo code, not the broker alone. The broker's own tail latency is measured with `iggy-bench`
 in `bench/PLAN.md`, on dedicated machines. CI runs:
-https://github.com/psinglap/laserdata-kits/actions/runs/39858106867,
-https://github.com/psinglap/laserdata-kits/actions/runs/39858394126,
-https://github.com/psinglap/laserdata-kits/actions/runs/39858409171
+https://github.com/psinglap/laserdata-kits/actions/runs/39858811179,
+https://github.com/psinglap/laserdata-kits/actions/runs/39858834401,
+https://github.com/psinglap/laserdata-kits/actions/runs/39858848027
 
 | File | What it is |
 |---|---|
