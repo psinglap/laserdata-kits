@@ -60,13 +60,13 @@ and for a brand over its quota, its backlog, its oldest wait and how long it too
 **What the numbers mean.** The kit times each trigger event from the moment `workspaces.py` creates
 it to the moment the evaluator has it, through Python clients, on whatever machine you run it on. On a
 shared 2-vCPU GitHub runner, with the broker and four Python processes on one box, at 3,000 trigger
-events a second across 40 workspace topics with 4 MB/s of ingestion next door, three CI runs held
-p50 14 to 21 ms, p99 29 to 43 ms and p99.9 33 to 49 ms (medians per second) over 66 steady-state
-seconds per shard, with no second over the 100 ms budget (worst second 55 ms), and every campaign
+events a second across 40 workspace topics with 4 MB/s of ingestion next door, four CI runs held
+p50 4.8 to 13.2 ms, p99 13.8 to 24.6 ms and p99.9 14.9 to 27.8 ms (medians per second) over 66 steady-state
+seconds per shard, with no second over the 100 ms budget (worst second 33 ms), and every campaign
 trigger fired within 1 s. While ws-0002 ran a flash sale of 4,000 extra events a second for 10 s
-against a 1,500/s quota, the other workspaces on its shard kept a median per-second p99 of 32 to 45 ms
-(28 to 41 ms without the sale); ws-0002's backlog peaked at 19,294 to 27,375 events on its own topic,
-its oldest event waited 13.1 to 18.7 s, and the backlog cleared 29 to 39 s after it was first held.
+against a 1,500/s quota, the other workspaces on its shard kept a median per-second p99 of 13.9 to 25.9 ms
+(13.7 to 23.7 ms without the sale); ws-0002's backlog peaked at 27,197 to 27,472 events on its own topic,
+its oldest event waited 18.5 to 18.9 s, and the backlog cleared 35.8 to 36.0 s after it was first held.
 That is the end-to-end lane through this demo code, not the broker alone. The broker's own tail latency,
 the number of workspace topics a cluster carries comfortably, and cost per billion events are measured
 with `iggy-bench` on dedicated machines (`bench/PLAN.md`).
