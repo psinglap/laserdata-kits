@@ -108,7 +108,7 @@ if __name__ == "__main__":
     p.add_argument("--retry", type=float, default=0.02, help="share of webhooks the provider sends twice")
     p.add_argument("--writers", type=int, default=2, help="connections sending in parallel")
     p.add_argument("--tick-ms", type=float, default=20)
-    p.add_argument("--surge-rate", type=float, default=20_000, help="extra Read webhooks a second during the surge")
+    p.add_argument("--surge-rate", type=float, default=6_000, help="extra Read webhooks a second during the surge (about 5x the normal Read rate)")
     p.add_argument("--surge-at", type=float, default=60, help="seconds before the Read surge starts")
     p.add_argument("--surge-for", type=float, default=0, help="Read surge length in seconds (0 = none)")
     asyncio.run(main(p.parse_args()))
