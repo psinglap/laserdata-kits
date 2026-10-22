@@ -16,12 +16,12 @@ pip install -q -r requirements.txt
 python -m py_compile common.py gateway.py aggregator.py log_flood.py otlp_tee.py
 # The aggregator starts first and creates the topics; the gateway and the neighbour follow.
 # 4 clusters x 8 services x 6 pods x 6 routes x 8 buckets = 9,216 series scraped every 5 s (~1,850 samples/s),
-# 10 s timeslices, 1% of samples sent twice, 0.1% counter resets; a rollout doubles the pods from second 30 for
+# 10 s timeslices, 1% of samples sent twice (copies of the last ~10 s of samples), 0.1% counter resets; a rollout doubles the pods from second 30 for
 # 15 s; 2 MB/s of raw logs from second 20.
 timeout 80 python -u aggregator.py --timeslice-s 10 > aggregator.log 2>&1 &
 sleep 3
 timeout 72 python -u gateway.py --clusters 4 --services 8 --pods 6 --routes 6 --buckets 8 --scrape-s 5 \
-  --timeslice-s 10 --resend-pct 1 --reset-pct 0.1 --peak 2 --peak-at 30 --peak-for 15 > gateway.log 2>&1 &
+  --timeslice-s 10 --resend-pct 1 --resend-window 20000 --reset-pct 0.1 --peak 2 --peak-at 30 --peak-for 15 > gateway.log 2>&1 &
 timeout 70 python -u log_flood.py --mbps 2 --at 20 --duration 35 > logs.log 2>&1 &
 wait || true
 echo "--- gateway.log";    head -n 2 gateway.log; tail -n 3 gateway.log

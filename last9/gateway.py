@@ -10,8 +10,9 @@ sample is published to the samples topic, keyed by shard key (cluster, metric, s
   * --reset-pct of samples are a counter reset: the process restarted and counts again from zero.
 A rollout (--peak) adds a new generation of pods for --peak-for seconds: new series, the cardinality spike.
 
-At-least-once on purpose: --resend-pct of samples are sent a second time later, as a remote-write client that
-timed out waiting for an acknowledgement would. The aggregator (aggregator.py) must count each one once.
+At-least-once on purpose: --resend-pct of samples are sent a second time, up to --resend-window samples later, as
+a receiver retrying an old batch or a gateway replaying its queue after a restart would. Most copies land after a
+newer sample of the same series. The aggregator (aggregator.py) must count each one once.
 
 The check: for every timeslice the gateway keeps its own count of what each output group gained (cluster x
 service x le), and publishes it to window-truth once the timeslice has closed, so the aggregator can compare.
@@ -49,7 +50,10 @@ async def main(a):
     slots = max(1, round(a.scrape_s / TICK))
     due = defaultdict(list)                  # slot -> series scraped in that slot of every interval
     truth = defaultdict(lambda: defaultdict(int))   # timeslice -> "cluster|service|le" -> increase
-    recent = deque(maxlen=5000)              # recently sent samples, for the at-least-once resends
+    # Recently sent samples, for the at-least-once resends. Wide enough that most copies land after a newer
+    # sample of the same series (a receiver retrying an old batch, a gateway replaying its queue on restart):
+    # a copy of the latest sample adds nothing to a cumulative counter, an older one is what does damage.
+    recent = deque(maxlen=a.resend_window)
     stats = defaultdict(float)
     live = [0]
 
@@ -159,6 +163,7 @@ if __name__ == "__main__":
     p.add_argument("--timeslice-s", type=float, default=60, help="the aggregation timeslice (match aggregator.py)")
     p.add_argument("--grace-s", type=float, default=2, help="the aggregator's grace after a timeslice ends")
     p.add_argument("--resend-pct", type=float, default=0.5, help="share of samples sent twice (retries)")
+    p.add_argument("--resend-window", type=int, default=50_000, help="a retry is a copy of one of the last N samples")
     p.add_argument("--reset-pct", type=float, default=0.05, help="share of samples that are a counter reset")
     p.add_argument("--peak", type=float, default=1, help="pods multiplier during a rollout (new series)")
     p.add_argument("--peak-at", type=float, default=0, help="seconds after start")
