@@ -99,6 +99,9 @@ async def main(a):
     async def report():
         while True:
             await asyncio.sleep(1)
+            # Move what survived the last second (lists, travellers) out of the collector's reach, so a full
+            # collection never walks hundreds of thousands of long-lived objects and pauses the readers.
+            gc.freeze()
             if not caught_up[0]:
                 # caught up once a whole second of searches arrived inside the budget; partitions interleave,
                 # so one fresh search alone doesn't mean the replay is finished

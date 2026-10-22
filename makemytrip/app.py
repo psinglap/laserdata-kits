@@ -116,6 +116,9 @@ async def main(a):
     async def report():
         while True:
             await asyncio.sleep(1)
+            # Move what survived the last second (lists, travellers) out of the collector's reach, so a full
+            # collection never walks hundreds of thousands of long-lived objects and pauses the readers.
+            gc.freeze()
             phase = "surge" if stats["surge"] else "steady"
             n = stats["b2c"] + stats["b2b"]
             print(f"[app] {n:>7,} searches/s ({phase})  B2C {stats['b2c']:,}  B2B {stats['b2b']:,}  "
