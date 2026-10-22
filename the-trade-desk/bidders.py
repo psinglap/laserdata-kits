@@ -4,7 +4,8 @@ Plays --servers bid servers in one process. Each one wins impressions for ad gro
 bid on and, for every win, publishes to the spend topic, keyed by ad group:
   * bid server, ad group, flight, a per-(server, ad group) sequence and the server's running spend for that
     ad group in this flight (the resulting total in USD, never only the price of the last win).
-Each bid server also reads pacing-decisions on its own connection and consumer group, and applies them to
+Each bid server also reads pacing-decisions on its own connection, straight from the partitions (no consumer
+group, which visits one partition per poll and adds queueing), and applies them to
 its own view: PAUSE stops bidding on the ad group, THROTTLE bids on about half the opportunities, OPEN
 resumes. A bid server never sees another's view, so a pause reaches every server through the log.
 
@@ -20,7 +21,7 @@ import time
 from collections import defaultdict
 from datetime import timedelta
 
-from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import Consumer, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
 from common import (CPM_HIGH, CPM_LOW, DEFAULT_URL, PACING, PARTITIONS, SPEND, STREAM, Window, ad_group,
                     ensure_topics, flight, load, msg, part)
@@ -54,11 +55,28 @@ async def main(a):
                 lat.add((time.time_ns() - d["ns"]) / 1e6)   # live decisions only, not ones replayed at start-up
         return on_decision
 
-    readers = []
-    for b in servers:
-        readers.append((await (await own_client()).consumer_group(
-            f"{b}-{os.getpid()}", STREAM, PACING, polling_strategy=PollingStrategy.First(), batch_length=1000,
-            auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500)), reader(b)))
+    async def read(c, b, on_decision):
+        # Each partition in turn, from the start of the log (the view is rebuilt from it), then from our own
+        # position; nothing is stored on the broker. A full batch means more is waiting, so no pause.
+        pids = range(PARTITIONS[PACING])
+        who = {p: Consumer.Single(f"{b}-{os.getpid()}-p{p}") for p in pids}
+        nxt = {}
+        while True:
+            more = False
+            for p in pids:
+                ms = await c.poll_messages(STREAM, PACING, consumer=who[p], partition_id=p, count=1000,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    for m in ms:
+                        await on_decision(m)
+                    more = more or len(ms) == 1000
+            if not more:
+                await asyncio.sleep(0.0005)
+
+    readers = [(await own_client(), b, reader(b)) for b in servers]     # one connection per bid server's reader
     gc.freeze()                             # keep start-up objects out of the collector's way
 
     def allowed(b, g, f):
@@ -118,7 +136,7 @@ async def main(a):
             for k in [k for k in cum if k[0] <= old]:
                 del cum[k]
 
-    await asyncio.gather(win_loop(), report(), *(c.consume_messages(cb, asyncio.Event()) for c, cb in readers))
+    await asyncio.gather(win_loop(), report(), *(read(c, b, cb) for c, b, cb in readers))
 
 
 if __name__ == "__main__":
