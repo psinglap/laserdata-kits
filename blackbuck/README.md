@@ -6,6 +6,7 @@ order per device, while the fuel is still going. It runs beside Kafka, so nothin
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source
 engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.blackbuck-kit
 - **One slide:** [`LaserData_BlackBuck_FuelAlerts.pdf`](LaserData_BlackBuck_FuelAlerts.pdf)
 
 ## Why this use case
