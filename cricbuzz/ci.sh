@@ -23,10 +23,11 @@ timeout 88 python -u commentary_desk.py --matches $M --speed 60 > desk.log 2>&1 
 sleep 4
 timeout 76 python -u impressions.py --rate 250 --x 4 --at 40 --for 15 > impressions.log 2>&1 &
 timeout 76 python -u commentary_node.py --name commentary-1 --matches $M > commentary-1.log 2>&1 &
-# commentary-2 and match alerts run, stop at 34 s and start again: on restart the node must rebuild every live
-# match from the log, and match alerts must send nothing twice.
-( timeout 34 python -u match_alerts.py > alerts.log 2>&1 || true; sleep 1
-  timeout 40 python -u match_alerts.py > alerts-restart.log 2>&1 || true ) &
+# commentary-2 stops at 34 s and match alerts at 46 s, and each starts again: on restart the node must rebuild
+# every live match from the log, and match alerts must send nothing twice. The restarts are staggered so the two
+# start-ups don't land in the same second on the runner's 2 vCPUs.
+( timeout 46 python -u match_alerts.py > alerts.log 2>&1 || true; sleep 1
+  timeout 28 python -u match_alerts.py > alerts-restart.log 2>&1 || true ) &
 timeout 34 python -u commentary_node.py --name commentary-2 --matches $M > commentary-2.log 2>&1 || true
 sleep 1
 timeout 40 python -u commentary_node.py --name commentary-2 --matches $M > commentary-2-restart.log 2>&1 || true
