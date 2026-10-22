@@ -2,7 +2,7 @@
 passing every 50 runs) from the same lines the commentary nodes show, and takes a wicket alert back when the
 desk overturns that wicket on review.
 
-It reads every partition with its own connection and its own position, so it never slows the commentary nodes
+It reads every partition with its own position, on its own connection, so it never slows the commentary nodes
 and they never slow it. Each alert is first recorded on the alerts-sent topic and then handed to the push
 gateway (simulated here: the kit counts it). On start, or a restart, the service reads that record, then
 rebuilds every live match from the commentary log: an alert already recorded is never sent again, a missed one
@@ -101,35 +101,42 @@ async def main(a):
                 alert("milestone", v, v["l"], now)
 
     async def record():
-        # Record, then push: one batch per tick from its own connection, never from inside the read loop.
-        c = await connect(a.url)
+        # Record, then push: one batch per tick, never from inside the read loop. It reuses the start-up
+        # connection, which is otherwise idle: every new connection is a login on the broker.
         due = time.monotonic()
         while True:
             if queue:
                 batch = queue[:]
                 del queue[:len(batch)]
-                await c.send_messages(STREAM, SENT, 0, batch)
+                await admin.send_messages(STREAM, SENT, 0, batch)
             due += a.tick_ms / 1000
             await asyncio.sleep(max(0.0, due - time.monotonic()))
 
-    async def read(pid):
+    async def read():
+        # One connection reads every partition in turn, each from this service's own position. Alerts have a
+        # 50 ms budget, so one reader polling every few ms is enough, and a restart opens one connection, not four.
         c = await connect(a.url)
-        me, nxt = Consumer.Single(f"{a.name}-{pid}"), None
+        me = {p: Consumer.Single(f"{a.name}-{p}") for p in range(PARTITIONS)}
+        nxt = {}
         while True:
-            ms = await c.poll_messages(STREAM, LANE, consumer=me, partition_id=pid, count=a.batch, auto_commit=False,
-                                       polling_strategy=PollingStrategy.Offset(nxt) if nxt is not None else PollingStrategy.First())
-            if ms:
-                apply(ms, time.time_ns())
-                nxt = ms[-1].offset() + 1
-                if len(ms) == a.batch:
-                    continue
-            if pid not in head:
-                head.add(pid)
-                if len(head) == PARTITIONS:
-                    caught[0] = time.monotonic()
-                    print(f"[{a.name}] rebuilt from the log in {caught[0] - started:.2f}s: {len(seqs)} live matches; "
-                          f"sent late {st['late']}, skipped as too old {st['stale']}", flush=True)
-            await asyncio.sleep(a.poll_ms / 1000)
+            more = False
+            for pid in range(PARTITIONS):
+                ms = await c.poll_messages(STREAM, LANE, consumer=me[pid], partition_id=pid, count=a.batch,
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[pid]) if pid in nxt
+                                           else PollingStrategy.First())
+                if ms:
+                    apply(ms, time.time_ns())
+                    nxt[pid] = ms[-1].offset() + 1
+                    more = more or len(ms) == a.batch
+                if (not ms or len(ms) < a.batch) and pid not in head:
+                    head.add(pid)                        # this partition's replay reached the head of the log
+                    if len(head) == PARTITIONS:
+                        caught[0] = time.monotonic()
+                        print(f"[{a.name}] rebuilt from the log in {caught[0] - started:.2f}s: {len(seqs)} live "
+                              f"matches; sent late {st['late']}, skipped as too old {st['stale']}", flush=True)
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
 
     async def report():
         while True:
@@ -149,7 +156,7 @@ async def main(a):
                   f"{st['retract']}  sent late {st['late']}", flush=True)
             st.update(wicket=0, milestone=0, retract=0)
 
-    await asyncio.gather(record(), report(), *(read(p) for p in range(PARTITIONS)))
+    await asyncio.gather(record(), report(), read())
 
 
 if __name__ == "__main__":
