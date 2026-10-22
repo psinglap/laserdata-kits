@@ -157,7 +157,7 @@ if __name__ == "__main__":
     p.add_argument("--name", default="recents")
     p.add_argument("--budget-ms", type=int, default=50, help="search-to-list p99 budget for the lane")
     p.add_argument("--hold-ms", type=int, default=0, help="what-if: apply each search only once it is this old")
-    p.add_argument("--readers", type=int, default=4, help="connections reading the lane's 64 partitions")
+    p.add_argument("--readers", type=int, default=8, help="connections reading the lane's 64 partitions, 8 each")
     p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
     p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--keep-s", type=float, default=3600, help="seconds to keep an idle traveller's list in memory")
