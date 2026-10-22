@@ -59,13 +59,13 @@ wait and how long it took to clear.
 **What the numbers mean.** The kit times each status webhook from the receiver in `webhooks.py` to
 the writer in `reporter.py`, through Python clients, on whatever machine you run it on. On a shared
 2-vCPU GitHub runner, with the broker, the receiver and two writers on one box, at 1,000 outbound
-messages a second across 40 campaigns (about 2,400 webhooks a second, 5,000 during the surge), three
-CI runs held a Delivered p50 of 4.2 to 6.6 ms, p99 of 8.3 to 11.8 ms and p99.9 of 8.6 to 12.5 ms
+messages a second across 40 campaigns (about 2,400 webhooks a second, 5,000 during the surge), five
+CI runs held a Delivered p50 of 4.1 to 6.6 ms, p99 of 8.3 to 11.8 ms and p99.9 of 8.6 to 12.5 ms
 (medians per second) over 65 steady-state seconds each, with no second over the 100 ms budget (worst
-second 12.9 ms), and 100% of Delivered statuses in the report within 1 s. While 2,500 extra Read
+second 18.0 ms), and 100% of Delivered statuses in the report within 1 s. While 2,500 extra Read
 webhooks a second arrived for 12 s against a 1,500/s cap, Delivered kept a median per-second p99 of
-8.4 to 12.0 ms (8.2 to 11.7 ms otherwise); the Read backlog peaked at 16,061 to 16,281 webhooks on
-status-read, its oldest webhook waited 11.3 s, and it cleared 26.0 s after it was first held. About 950
+8.4 to 12.0 ms (8.2 to 11.7 ms otherwise); the Read backlog peaked at 15,992 to 16,281 webhooks on
+status-read, its oldest webhook waited 11.3 to 11.4 s, and it cleared 26.0 s after it was first held. About 950
 Delivered webhooks a second became 149 to 150 report rows a second, and 18 to 20 provider retries a
 second were dropped. That is the end-to-end lane through this demo code, not the broker alone, and it
 does not include the providers, the webhook endpoint's own work or the database. The broker's own tail
