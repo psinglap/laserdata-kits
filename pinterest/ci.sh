@@ -80,7 +80,7 @@ print("ads-1 repeats dropped by event ID: %d" % (rep[-1] if rep else 0))
 if not rep or rep[-1] == 0:
     raise SystemExit("no repeated insertion was dropped: de-duplication did not run")
 PAT = (r"spend \$([0-9,.]+)  ad groups at budget ([0-9,]+)  overdelivery \$([0-9,.]+) \(([0-9.]+)% of spend, "
-       r"([0-9,]+) insertions past budget\)")
+       r"([0-9,]+) insertions? past budget\)")
 def days(f):
     out = []
     for l in open(f):

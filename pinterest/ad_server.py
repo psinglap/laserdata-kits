@@ -151,9 +151,9 @@ async def main(a):
                 for _ in range(a.tries):    # the auction's candidates, best first
                     i = int(a.adgroups * rng.random() ** a.skew)
                     g = ags[i]
-                    if tw.get(g, 0) + cost[i] <= limit[g]:
+                    if tw.get(g, 0) + cost[i] <= limit[g]:     # actual + in-flight + this insertion
                         break
-                    st["no_budget"] += 1    # the budget at work: this ad group sits out the auction
+                    st["no_budget"] += 1    # no budget left: it sits out this auction
                 else:
                     st["unfilled"] += 1     # every candidate was out of budget
                     continue
@@ -196,7 +196,7 @@ async def main(a):
                 s, o = spent[c], over[c]
                 print(f"[day] {c % 10000} closed: spend ${s / 1e6:,.2f}  ad groups at budget {at_budget[c]:,}  "
                       f"overdelivery ${o / 1e6:,.2f} ({100 * o / s if s else 0:.3f}% of spend, "
-                      f"{free[c]:,} insertions past budget)", flush=True)
+                      f"{free[c]:,} insertion{'' if free[c] == 1 else 's'} past budget)", flush=True)
                 for d in (total, last_n, my_n):     # forget days that ended more than one day ago
                     for k in [k for k in d if k < c]:
                         del d[k]
