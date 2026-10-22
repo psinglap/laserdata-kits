@@ -79,13 +79,14 @@ counted twice. These rules are a starting point; replace them with your framewor
 **What the numbers mean.** The kit times each outcome from the moment `router.py` publishes the
 final status to the moment `guard.py` has counted it, through Python clients, on whatever machine
 you run it on. On a shared GitHub runner (2 vCPU), with the broker and three Python processes on one
-box, two green CI runs at 500 payments a second held p50 12.6 to 12.8 ms, p99 25.4 to 25.7 ms and
-p99.9 26.8 to 27.2 ms (median per second over 63 steady-state seconds each, no second over the 50 ms
-budget), with 1 MB/s of API logs next door for 33 to 34 s. In both runs the guard scaled the healthy
-release 1% → 5% → 10% → 25% (short CI stages) and, after the defect started at 25%, decided ABORT
-1.77 to 1.88 s after the defect's first failed payment; the rollout applied it 1.83 to 1.90 s after
-the defect, with the verdict delivered in 1.9 to 2.0 ms. In that time the defective release served
-242 to 247 payments and failed 46 to 53 because of the defect. That is
+box, the guard reading the 16 outcome partitions directly on two connections, four green CI runs at
+500 payments a second held p50 2.2 to 4.6 ms, p99 3.9 to 8.2 ms and p99.9 4.2 to 8.7 ms (median per
+second over 62 steady-state seconds each, no second over the 50 ms budget), with 1 MB/s of API logs
+next door for 34 s. In three of the runs the guard scaled the healthy release 1% → 5% → 10% → 25%
+(short CI stages) and, after the defect started at 25%, decided ABORT 1.94 to 2.62 s after the
+defect's first failed payment; the rollout applied it 1.96 to 2.71 s after the defect, with the
+verdict delivered in 1.2 to 2.1 ms. In that time the defective release served 246 to 325 payments
+and failed 43 to 64 because of the defect. That is
 the end-to-end lane through this demo code at reduced scale, not the broker alone; the broker's own
 tail latency is measured with `iggy-bench` on dedicated machines (`bench/PLAN.md`). On a laptop or a
 larger machine, raise the rates.

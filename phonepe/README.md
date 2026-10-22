@@ -65,13 +65,13 @@ check started. A slow or congested lane shows up there first, and most of all in
 **What the numbers mean.** The kit times each velocity update from the moment `payments.py`
 completes the payment to the moment `risk.py` has applied it, through Python clients, on whatever
 machine you run it on. On a shared GitHub runner (2 vCPU), with the broker and three Python
-processes on one box, two green CI runs at 500 payments a second (5% in bursts, 2× for 15 s as the
-peak) held p50 12.0 to 12.3 ms, p99 23.4 to 24.7 ms and p99.9 25.0 to 26.4 ms (median per second
-over 63 steady-state seconds each, no second over the 50 ms budget). Through the peak (1,000
-payments a second) the median per-second p99 was 23.3 to 23.5 ms, worst 24.3 ms. Of about 5,600
-risk checks on repeat payers in each run (about 1,700 of them in bursts), none missed the payer's
-previous payment, and the example rule fired about 770 times. A 1 MB/s analytics stream ran next
-door for 33 s. That is the end-to-end lane through this demo code at
+processes on one box and the store reading the 16 partitions directly on two connections, four green
+CI runs at 500 payments a second (5% in bursts, 2× for 15 s as the peak) held p50 3.3 to 5.3 ms, p99
+6.0 to 9.4 ms and p99.9 6.7 to 10.6 ms (median per second over 61 to 62 steady-state seconds each, no
+second over the 50 ms budget). Through the peak (1,000 payments a second) the median per-second p99
+was 6.5 to 11.0 ms, worst 12.0 ms. Of about 5,400 to 5,700 risk checks on repeat payers in each run
+(about 1,700 of them in bursts), none missed the payer's previous payment, and the example rule fired
+about 750 to 780 times. A 1 MB/s analytics stream ran next door for 34 s. That is the end-to-end lane through this demo code at
 reduced scale, not the broker alone; the broker's own tail latency is measured with `iggy-bench` on
 dedicated machines (`bench/PLAN.md`). On a laptop or a larger machine, raise the rates.
 

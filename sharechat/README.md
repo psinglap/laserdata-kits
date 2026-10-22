@@ -67,13 +67,14 @@ job has the views in the database; older views stay the database's job.
 
 **What the numbers mean.** The kit times each flush from the moment `app.py` sends it to the moment
 `dedup.py` has applied it, through Python clients, on whatever machine you run it on. On a shared
-GitHub runner (2 vCPU), with the broker and three Python processes on one box, two green CI runs at
-2,500 views a second (500 flushes, 2× for 15 s as the peak) held p50 12.2 to 12.3 ms, p99 23.9 to
-24.0 ms and p99.9 25.5 to 25.6 ms (median per second over 63 steady-state seconds each, no second
-over the 50 ms budget). Through the peak (1,000 flushes a second) the median per-second p99 was
-24.5 to 24.7 ms, worst 26.2 ms. Of about 21,000 next-page feed requests in each run, none missed
-the user's last flush and no repeats were served; dedup removed about 42,000 just-viewed candidates
-per run. A 1 MB/s engagement stream ran next door for 33 s. That is the end-to-end lane through
+GitHub runner (2 vCPU), with the broker and three Python processes on one box and the dedup service
+reading the 16 partitions directly on two connections, four green CI runs at 2,500 views a second
+(500 flushes, 2× for 15 s as the peak) held p50 3.0 to 5.7 ms, p99 5.4 to 9.8 ms and p99.9 6.2 to
+11.4 ms (median per second over 61 to 62 steady-state seconds each, no second over the 50 ms budget).
+Through the peak (1,000 flushes a second) the median per-second p99 was 6.0 to 12.3 ms, worst 15.7 ms.
+Of about 21,000 next-page feed requests in each run, none missed the user's last flush and no
+repeats were served; dedup removed about 42,000 just-viewed candidates per run. A 1 MB/s engagement
+stream ran next door for 34 s. That is the end-to-end lane through
 this demo code at reduced scale, not the broker alone; the broker's own tail latency is measured
 with `iggy-bench` on dedicated machines (`bench/PLAN.md`). On a laptop or a larger machine, raise
 the rates.
