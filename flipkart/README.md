@@ -51,18 +51,19 @@ They print a line a second:
 moment `bcap.py` has applied it, and each stop from `bcap.py` to every ad server, through Python clients, on
 whatever machine you run it on. CI result on a shared 2-vCPU runner with the broker and all scripts on one box,
 reduced scale (about 3,000 billable events/s over 2,000 campaigns, 4 ad servers, 20-second budget days; ranges
-over two green runs, [run 39836784127](https://github.com/psinglap/laserdata-kits/actions/runs/39836784127) and
-[run 39837086632](https://github.com/psinglap/laserdata-kits/actions/runs/39837086632)): billable-to-BCAP
-**p50 3.6–4.7 ms, p99 6.4–8.5 ms, p99.9 7.0–9.3 ms** (medians of 62 steady-state seconds per run; worst second
-p99 7.0–9.2 ms), inside the 50 ms pass line in 124 of 124 steady-state seconds; stop-to-ad-servers **p50 2.5–2.9
-ms, p99 4.2–5.0 ms** to all four ad servers. With 2 MB/s of UI telemetry on the same broker, the lane's p99
-moved from 8.4 to 8.5 ms and from 6.4 to 6.4 ms. In each full budget day about ₹71,000–74,000 was charged and
-up to 362–368 of 2,000 campaigns reached their budget and were stopped; **over-burn was ₹13–42 a day, 0.018–0.059%
-of spend**. BCAP dropped 1,027–1,045 repeated events (₹1,178–1,394 that would otherwise have been charged twice)
-and 214–223 events more than an hour late. The watermark lag (BCAP's slowest partition) had a median of 24–26 ms
-and never came near the 2-second fail-safe line. That is the end-to-end loop through this demo code, not the
-broker alone; the broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated
-machines.
+over two green runs, [run 39837768596](https://github.com/psinglap/laserdata-kits/actions/runs/39837768596) and
+[run 39838034920](https://github.com/psinglap/laserdata-kits/actions/runs/39838034920)): billable-to-BCAP
+**p50 3.5–7.7 ms, p99 6.2–14.3 ms, p99.9 6.9–15.9 ms** (medians of 62 steady-state seconds per run; worst second
+p99 8.7–15.4 ms), inside the 50 ms pass line in 124 of 124 steady-state seconds; stop-to-ad-servers **p50 2.5–3.5
+ms, p99 4.2–6.1 ms** to all four ad servers. With 2 MB/s of UI telemetry on the same broker, the lane's p99 did
+not move (6.3 and 14.4 ms before and after). In each full budget day about ₹73,000–75,000 was charged and up to
+367–373 of 2,000 campaigns reached their budget and were stopped; **over-burn was ₹12–74 a day, 0.016–0.102% of
+spend**, highest on the slower runner, which is the point: the loop's tail sets the over-burn. BCAP dropped
+1,049–1,076 repeated events (₹1,349–1,387 that would otherwise have been charged twice) and 211–213 events sent
+more than an hour after their event time. The watermark lag (BCAP's slowest partition) had a median of 23–30 ms
+and a worst second of 289–390 ms, well inside the 2-second fail-safe line. That is the end-to-end loop through
+this demo code, not the broker alone; the broker's own tail latency is measured with `iggy-bench` in
+`bench/PLAN.md`, on dedicated machines.
 
 | File | What it is |
 |---|---|
