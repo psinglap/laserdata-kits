@@ -73,14 +73,15 @@ would build on stale features.
 **What the numbers mean.** The kit times each signal from the moment `apps.py` sends it to the moment
 `features.py` has applied it, through Python clients, on whatever machine you run it on. On a shared GitHub
 runner (2 vCPU), with the broker and four Python processes on one box, at 1,500 watch signals a second over
-200,000 profiles and 40 live events (2x for 15 s as the surge), the first green CI run held p50 4.0 ms,
-p99 7.1 ms and p99.9 8.4 ms (median per second over 62 steady-state seconds, no second over the 50 ms
-budget). Through the surge (3,000 signals a second) the median per-second p99 was 8.9 ms, worst 12.2 ms,
-with a 1 MB/s client-signal stream next door. Of 57,376 Live rail requests, none was built without the
-profile's last signal and no wrong tile was shown. The what-if with every signal applied 1 s late built
-40.8% of rails (median per second) without the last signal, 9,943 of them with a wrong now-watching tile.
-That is the end-to-end lane through this demo code at reduced scale, not the broker alone; the broker's
-own tail latency is measured with `iggy-bench` on dedicated machines (`bench/PLAN.md`).
+200,000 profiles and 40 live events (2x for 15 s as the surge), two green CI runs held p50 4.0 to 5.5 ms,
+p99 7.1 to 9.4 ms and p99.9 8.4 to 10.7 ms (median per second over 62 steady-state seconds each, no second
+over the 50 ms budget). Through the surge (3,000 signals a second) the median per-second p99 was 8.9 to
+11.6 ms, worst 12.2 to 16.6 ms, with a 1 MB/s client-signal stream next door. Of about 57,000 to 58,000 Live
+rail requests per run, none was built without the profile's last signal and no wrong tile was shown. The
+what-if with every signal applied 1 s late built 40.8 to 40.9% of rails (median per second) without the last
+signal, about 9,900 per run with a wrong now-watching tile. That is the end-to-end lane through this demo code
+at reduced scale, not the broker alone; the broker's own tail latency is measured with `iggy-bench` on
+dedicated machines (`bench/PLAN.md`).
 
 | File | What it is |
 |---|---|
