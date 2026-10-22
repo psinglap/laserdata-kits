@@ -4,6 +4,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 trap 'docker compose logs --tail 40 iggy || true' ERR
+# Flush the broker's writes to disk continuously, as a streaming host is tuned, instead of Linux's default of
+# holding up to 30 s of dirty pages and writing them in one burst. On the runner that burst (150-180 MB, 30-35 s
+# after the heavy neighbour starts) stalled every partition for 0.2-0.8 s at once; it is the runner's disk, not the lane.
+sudo sysctl -q -w vm.dirty_background_bytes=33554432 vm.dirty_expire_centisecs=200 vm.dirty_writeback_centisecs=100 || true
 docker compose up -d
 for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; sleep 1; done
 pip install -q -r requirements.txt
