@@ -146,11 +146,14 @@ async def main(a):
                                for p, ms in batches(topic, items)))
 
     async def send_marks(b):
-        items = []
+        # The whole batch carries one timestamp, taken before it is encoded: latency counts from the moment the
+        # batch arrived at the feed handler, so encoding and queueing the sends are inside the measurement.
+        ns, n, items = time.time_ns(), len(pairs), []
         for p in pairs:
             mark[p] = 0.5 * mark[p] + 0.5 * ltp[p]                     # the mark trails the last price a little
             mseq[p] += 1
-            items.append((p, SendMessage(msg(k=p, seq=mseq[p], mp=round(mark[p], 10), b=b, n=len(pairs)))))
+            body = f'{{"k":"{p}","seq":{mseq[p]},"mp":{mark[p]:.10g},"b":{b},"n":{n},"ns":{ns}}}'
+            items.append((p, SendMessage(body.encode())))
         await send(mark_w, MARKS, items)
 
     async def snapshot():

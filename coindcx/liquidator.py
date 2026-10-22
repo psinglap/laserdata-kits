@@ -267,7 +267,7 @@ if __name__ == "__main__":
     p.add_argument("--name", default="liquidator-1")
     p.add_argument("--shard", type=int, default=0)
     p.add_argument("--shards", type=int, default=1, help="workers sharing the accounts")
-    p.add_argument("--budget-ms", type=float, default=25, help="lane p99 budget, feed or book to this worker")
+    p.add_argument("--budget-ms", type=float, default=50, help="lane p99 budget, feed or book to this worker")
     p.add_argument("--poll-ms", type=float, default=1, help="wait between reads when the lane is idle")
     p.add_argument("--batch", type=int, default=5000)
     asyncio.run(main(p.parse_args()))

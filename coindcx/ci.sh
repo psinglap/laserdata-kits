@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CI smoke test: start Apache Iggy 0.9.0, run the mark price lane at small scale for about a minute with two
-# liquidation workers, a market crash and a trade export next door. Pass only if each worker holds the 25 ms lane
+# liquidation workers, a market crash and a trade export next door. Pass only if each worker holds the 50 ms lane
 # p99 in 95% of its steady-state seconds, liquidation orders flow back and are filled, and the comparison with a
 # worker running 0.5 s behind is measured.
 set -euo pipefail
