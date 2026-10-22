@@ -24,9 +24,7 @@ import itertools
 import random
 import time
 from collections import defaultdict
-from datetime import timedelta
-
-from apache_iggy import AutoCommit, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import Consumer, Partitioning, PollingStrategy, SendMessage
 
 from common import (DEFAULT_URL, JOINS, PARTITIONS, PLACEMENTS, STATE, STREAM, Window, connect, dc_id,
                     ensure_topics, load, msg, part_of, place_id)
@@ -35,9 +33,7 @@ from common import (DEFAULT_URL, JOINS, PARTITIONS, PLACEMENTS, STATE, STREAM, W
 async def main(a):
     await ensure_topics(await connect(a.url), STATE, JOINS, PLACEMENTS)
     lane, join_w = await connect(a.url), await connect(a.url)          # one connection per writer and reader
-    placements = await (await connect(a.url)).consumer_group(
-        "fleet-check", STREAM, PLACEMENTS, polling_strategy=PollingStrategy.Next(), batch_length=1000,
-        auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(microseconds=500))
+    pl_reader = await connect(a.url)
 
     rng = random.Random(11)
     places = [place_id(i) for i in range(a.places)]
@@ -214,7 +210,26 @@ async def main(a):
             return "closing"
         return "full" if v[3] >= v[2] else "ok"
 
-    async def on_placement(m):
+    async def read_placements():
+        # Every partition read directly, from start-up on, on its own connection.
+        who = {p: Consumer.Single(f"fleet-check-{p}") for p in range(PARTITIONS[PLACEMENTS])}
+        since = PollingStrategy.Timestamp(time.time_ns() // 1000)
+        nxt = {}
+        while True:
+            more = False
+            for p in who:
+                ms = await pl_reader.poll_messages(STREAM, PLACEMENTS, consumer=who[p], partition_id=p, count=1000,
+                                                   auto_commit=False,
+                                                   polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt else since)
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    for m in ms:
+                        on_placement(m)
+                    more = more or len(ms) == 1000
+            if not more:
+                await asyncio.sleep(0.001)
+
+    def on_placement(m):
         pl = load(m.payload())
         req = pending.pop(pl["id"], None)
         if req is None:
@@ -256,7 +271,7 @@ async def main(a):
                   f"tick late max {st['late_ms']:.0f}ms  send max {st['send_ms']:.0f}ms", flush=True)
             st.clear()
 
-    await asyncio.gather(run_fleet(), placements.consume_messages(on_placement, asyncio.Event()), report())
+    await asyncio.gather(run_fleet(), read_placements(), report())
 
 
 if __name__ == "__main__":

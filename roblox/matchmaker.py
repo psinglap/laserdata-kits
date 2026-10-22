@@ -5,8 +5,9 @@ own offsets, no consumer group, nothing committed) on its own connection, so eac
 every server: place, edge data center, capacity, players, open or shutting down. On start it rebuilds that index
 from the log before it takes a single join.
 
-Join requests arrive on join-requests, keyed by place, shared among the matchmakers as one consumer group, so a
-place's joins are matched by one matchmaker at a time. Each request is matched the way Roblox's documented
+Join requests arrive on join-requests, keyed by place. Each matchmaker owns a share of its partitions (--shard of
+--shards) and reads them directly too, so a place's joins are matched by one matchmaker; on start it takes joins
+from that moment on, since older ones have timed out. Each request is matched the way Roblox's documented
 default matchmaking works: drop servers that are full or shutting down, score the rest (here two of the default
 signals: Latency, the player's own edge data center first, weight 3; Occupancy, fuller servers first, weight 2),
 pick the highest. Placements this matchmaker sent that a server has not reported yet count against its free
@@ -23,9 +24,7 @@ import gc
 import os
 import time
 from collections import defaultdict
-from datetime import timedelta
-
-from apache_iggy import AutoCommit, Consumer, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import Consumer, Partitioning, PollingStrategy, SendMessage
 
 from common import (DEFAULT_URL, JOINS, PARTITIONS, PLACEMENTS, STATE, STREAM, Window, connect, ensure_topics,
                     load, msg)
@@ -142,7 +141,7 @@ async def main(a):
             await asyncio.sleep(max(0.0, due - time.monotonic()))
             stale[0] = index.copy()
 
-    async def on_request(m):
+    def on_request(m):
         r = load(m.payload())
         if time.time_ns() - r["ns"] > a.expire_s * 1e9:
             st["expired"] += 1              # the player's join has already timed out
@@ -166,10 +165,24 @@ async def main(a):
     async def take_joins():
         while caught[0] is None:
             await asyncio.sleep(0.05)       # never match before the index is rebuilt
-        group = await (await connect(a.url)).consumer_group(
-            "matchmakers", STREAM, JOINS, polling_strategy=PollingStrategy.Next(), batch_length=1000,
-            auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(microseconds=500))
-        await group.consume_messages(on_request, asyncio.Event())
+        jr = await connect(a.url)           # its own connection, so joins never queue behind the lane
+        mine = [p for p in range(PARTITIONS[JOINS]) if p % a.shards == a.shard]
+        who = {p: Consumer.Single(f"{me}-joins-{p}") for p in mine}
+        since = PollingStrategy.Timestamp(time.time_ns() // 1000)     # joins from now on
+        nxt = {}
+        while True:
+            more = False
+            for p in mine:
+                ms = await jr.poll_messages(STREAM, JOINS, consumer=who[p], partition_id=p, count=a.batch,
+                                            auto_commit=False,
+                                            polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt else since)
+                if ms:
+                    nxt[p] = ms[-1].offset() + 1
+                    for m in ms:
+                        on_request(m)
+                    more = more or len(ms) == a.batch
+            if not more:
+                await asyncio.sleep(a.poll_ms / 1000)
 
     async def report():
         while True:
@@ -195,6 +208,8 @@ if __name__ == "__main__":
     p.add_argument("--url", default=DEFAULT_URL)
     p.add_argument("--name", default="mm-1")
     p.add_argument("--budget-ms", type=float, default=50, help="change-to-index p99 budget")
+    p.add_argument("--shard", type=int, default=0, help="this matchmaker's share of the places: 0 .. shards-1")
+    p.add_argument("--shards", type=int, default=1, help="how many matchmakers share the places")
     p.add_argument("--refresh-s", type=float, default=3, help="refresh period of the comparison index")
     p.add_argument("--expire-s", type=float, default=2.0, help="a join request older than this has timed out")
     p.add_argument("--poll-ms", type=float, default=1, help="wait between reads when the lane is idle")

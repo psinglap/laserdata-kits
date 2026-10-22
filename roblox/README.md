@@ -41,8 +41,8 @@ pressing Play a second, 150 friend joins and 550 leaves a second, and a heartbea
 docker compose up -d                 # Apache Iggy 0.9.0 on :8090
 pip install -r requirements.txt      # apache-iggy 0.9.0
 python fleet.py &                    # game servers, players pressing Play, and the check
-python matchmaker.py --name mm-1 &   # a matchmaker and its index
-python matchmaker.py --name mm-2     # another; each holds every server
+python matchmaker.py --name mm-1 --shard 0 --shards 2 &   # a matchmaker: half the places' joins
+python matchmaker.py --name mm-2 --shard 1 --shards 2     # the other half; each holds every server
 ```
 
 They print a line a second:
@@ -56,7 +56,7 @@ They print a line a second:
 | File | What it is |
 |---|---|
 | `fleet.py` | The game servers and the players. Publishes each server's state to `server-state` with a per-server sequence and the resulting state (players, capacity, open or closing, placements seen); sends join requests keyed by place; starts servers where a place runs short of slots; checks every placement against the server at that moment. `--herd` runs a creator update and a thundering herd. |
-| `matchmaker.py` | A matchmaker: reads every partition of the lane directly into its index, rebuilds from the log on start, filters and scores servers like the default configuration (Latency, Occupancy), and keeps a copy of its index refreshed every 3 s for comparison. |
+| `matchmaker.py` | A matchmaker: reads every partition of the lane directly into its index, rebuilds from the log on start, takes the join requests of its share of places (`--shard` of `--shards`), filters and scores servers like the default configuration (Latency, Occupancy), and keeps a copy of its index refreshed every 3 s for comparison. |
 | `analytics_flood.py` | A heavy, latency-tolerant stream (analytics events) on its own topic, for the isolation test. |
 | `qaas_bridge.py` | Copies a Kafka-protocol topic that carries your engine instances' state reports into Iggy as a read-only consumer group, for a shadow run on real traffic. |
 | `ci.sh` | The CI run: about 1,500 servers, a creator update with a 10× herd, an analytics neighbour, two matchmakers and a restart. |
@@ -73,8 +73,8 @@ Roblox says its index refreshes "every few seconds"; set `--refresh-s` on `match
    through the herd.
 2. **Analytics at full volume next door:** `python analytics_flood.py --mbps 50` while it runs.
    Pass: the lane's p99 moves by less than 10%.
-3. **A new cell's matchmaker:** stop one `matchmaker.py` and start it again, or start a third; it rebuilds its
-   index from the log before it takes a join. Pass: every live server in its index within seconds.
+3. **A new cell's matchmaker:** stop one `matchmaker.py` and start it again with the same `--shard`; it rebuilds
+   its index from the log before it takes a join. Pass: every live server in its index within seconds.
 
 ## Shadow your own traffic
 

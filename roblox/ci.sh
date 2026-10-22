@@ -2,7 +2,7 @@
 # CI smoke test: start Apache Iggy 0.9.0 and run the server state lane at small scale for about a minute: about
 # 1,500 game servers of 60 places in 6 edge data centers, 100 players pressing Play a second plus friend joins and
 # leaves, a creator update with a 10x thundering herd of joins into the most popular place, 2 MB/s of analytics
-# events next door, two matchmakers, and one matchmaker restarted as the herd starts.
+# events next door, two matchmakers (each owning half the places' joins), and one of them restarted before the herd.
 # Pass only if each matchmaker holds the 50 ms change-to-index p99 in 95% of its steady-state seconds, the
 # restarted one rebuilds its index from the log, and placements are checked against the servers, with fewer
 # bounced joins than an index refreshed every 3 s would have caused.
@@ -21,11 +21,11 @@ timeout 82 python -u fleet.py --places 60 --servers 1500 --regions 6 --joins 100
   --heartbeat-s 5 --herd 10 --herd-at 40 --herd-for 15 > fleet.log 2>&1 &
 sleep 4
 timeout 70 python -u analytics_flood.py --mbps 2 --at 20 --duration 35 > analytics.log 2>&1 &
-timeout 76 python -u matchmaker.py --name mm-1 > mm-1.log 2>&1 &
-# mm-2 runs, stops at 34 s and starts again as the herd begins: it must rebuild its index from the log first.
-timeout 34 python -u matchmaker.py --name mm-2 > mm-2.log 2>&1 || true
+timeout 76 python -u matchmaker.py --name mm-1 --shard 0 --shards 2 > mm-1.log 2>&1 &
+# mm-2 runs, stops at 24 s and starts again: it must rebuild its index from the log before it takes a join.
+timeout 24 python -u matchmaker.py --name mm-2 --shard 1 --shards 2 > mm-2.log 2>&1 || true
 sleep 1
-timeout 40 python -u matchmaker.py --name mm-2 > mm-2-restart.log 2>&1 || true
+timeout 51 python -u matchmaker.py --name mm-2 --shard 1 --shards 2 > mm-2-restart.log 2>&1 || true
 wait || true
 echo "--- fleet.log"; head -n 1 fleet.log; grep -m 1 "creator update" fleet.log || true
 grep -E "\(herd\)" fleet.log | head -n 3 | cut -c1-400 || true; tail -n 2 fleet.log | cut -c1-400
