@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CI smoke test: start Apache Iggy 0.9.0, run the OpsAI command lane at small scale for about a minute, with a
-# customer log burst next to it and one partition's agents disconnected for 25 s, and pass only if the lane
+# customer log burst next to it and one partition's agents disconnected for 30 s, and pass only if the lane
 # reports PASS, no command finishes after its deadline, the disconnected agents' stale requests are refused,
 # and every request is answered.
 set -euo pipefail
@@ -15,10 +15,10 @@ for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; 
 pip install -q -r requirements.txt
 python -m py_compile common.py agents.py opsai.py log_burst.py pulsar_bridge.py
 # The agents start first and create the topics; OpsAI and the neighbour follow.
-# 80 investigations over 400 clusters; partition 15's agents drop off at 25 s for 25 s; 2 MB/s of logs from 20 s.
-timeout 82 python -u agents.py --offline-partition 15 --offline-at 25 --offline-for 25 > agents.log 2>&1 &
+# 80 investigations over 400 clusters; partition 15's agents drop off at 25 s for 30 s; 2 MB/s of logs from 20 s.
+timeout 82 python -u agents.py --offline-partition 15 --offline-at 25 --offline-for 30 > agents.log 2>&1 &
 sleep 3
-timeout 74 python -u opsai.py --clusters 400 --investigations 80 > opsai.log 2>&1 &
+timeout 74 python -u opsai.py --clusters 400 --investigations 80 --write-timeout 20 > opsai.log 2>&1 &
 timeout 70 python -u log_burst.py --mbps 2 --at 20 --duration 30 > logs.log 2>&1 &
 wait || true
 echo "--- opsai.log";  head -n 1 opsai.log; tail -n 6 opsai.log

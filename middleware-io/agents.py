@@ -29,8 +29,9 @@ import os
 import random
 import time
 from collections import defaultdict
+from datetime import timedelta
 
-from apache_iggy import Consumer, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import Consumer, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
 from common import DEFAULT_URL, PARTITIONS, REPLIES, REQUESTS, STREAM, ensure_topics, load, msg, part
 
@@ -54,7 +55,9 @@ async def main(a):
         return c
 
     await ensure_topics(await own_client(), REQUESTS, REPLIES)
-    out = await (await own_client()).producer(STREAM, REPLIES, topic_partitions_count=PARTITIONS[REPLIES])
+    # A short linger: the per-partition sends of one tick go out together, not paced apart.
+    cfg = DirectProducerConfig(batch_length=1000, linger_time=timedelta(microseconds=200))
+    out = await (await own_client()).producer(STREAM, REPLIES, topic_partitions_count=PARTITIONS[REPLIES], mode=cfg)
     start_ns = time.time_ns()
     since_us = start_ns // 1000 - int(a.lookback_s * 1e6)
     stats = defaultdict(int)

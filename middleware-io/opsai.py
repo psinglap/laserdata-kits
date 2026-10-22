@@ -25,8 +25,9 @@ import random
 import secrets
 import time
 from collections import defaultdict
+from datetime import timedelta
 
-from apache_iggy import Consumer, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import Consumer, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
 
 from common import (APPS, DEFAULT_URL, FIXES, LOGS_CMD, PARTITIONS, REPLIES, REQUESTS, SLOW_LOGS, STREAM, TRIAGE,
                     VERIFY, Window, clamp_timeout, cluster, ensure_topics, load, msg, part)
@@ -39,7 +40,10 @@ async def main(a):
         return c
 
     await ensure_topics(await own_client(), REQUESTS, REPLIES)
-    producer = await (await own_client()).producer(STREAM, REQUESTS, topic_partitions_count=PARTITIONS[REQUESTS])
+    # A short linger: the per-partition sends of one tick go out together, not paced apart.
+    cfg = DirectProducerConfig(batch_length=1000, linger_time=timedelta(microseconds=200))
+    producer = await (await own_client()).producer(STREAM, REQUESTS, topic_partitions_count=PARTITIONS[REQUESTS],
+                                                   mode=cfg)
     run = secrets.token_hex(3)              # request IDs: run + counter, so two requests never share an ID
     counter = [0]
     start_ns = time.time_ns()
