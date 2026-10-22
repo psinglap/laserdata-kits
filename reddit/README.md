@@ -58,13 +58,37 @@ python content_events.py &             # content and its ML signals, keyed by co
 python time_travel.py --at 30          # a Time-Travel replay next door
 ```
 
-Each prints a line a second:
+Each prints a line a second (from the kit's CI run):
 
 ```
-CI_SAMPLE_PENDING
+[joiner-0]   299 joins/s  last-signal-to-joined p50  12.7ms  p99  21.4ms  p99.9  21.4ms  PASS (<50ms)  join-rate  98.8%  5s-window join-rate  93.4%  content to enriched p50   309ms  p99  1909ms  window p50  2369ms  without a signal   7/s  late 539  repeats 0  waiting 142
+[rev2]   601 enriched/s  last-signal-to-REV2 p50  23.6ms  p99  46.3ms  p99.9  46.3ms  PASS (<100ms)  joiner-to-REV2 p99  23.2ms  actioned on ML signals   7/s (1,107 total)  time to action p50   272ms  p99   572ms  without a signal  19/s (1,372 total)  repeats 0
 ```
 
-**What the numbers mean.** CI_NUMBERS_PENDING
+The business numbers: `join-rate`, signals joined over signals expected (your Signals-Joiner metric),
+and `content to enriched`, how long a post waits for its scores. The lane's join-rate is 100% minus the
+signals that came after the wait limit or never came (1.2% by default), so the line next to it matters:
+`5s-window join-rate` is the same events under a plain 5 s event-time tumbling window, where a score that
+lands after its post's window closes joins nothing, and `window p50` is when that window would have
+written the post out. `without a signal` counts posts that went out past the wait limit; `repeats`
+should stay 0 unless something was delivered twice.
+
+**What the numbers mean.** The kit times each post from the moment its last input (the post or its
+slowest score) is written to the moment its joiner has joined it, and on to the moment REV2's reader has
+the fully enriched post, through Python clients, on whatever machine you run it on. On a shared GitHub
+runner, with the broker and five Python processes on one box, at 600 posts and comments a second (the
+published normal rate) with about 1,290 scores a second on 4 partitions per topic, two joiners, and a
+Time-Travel replay of 20,000 messages a second next door from second 30, two CI runs held
+last-signal-to-joined p50 12.9 to 13.4 ms, p99 22.1 to 22.8 ms and p99.9 22.9 to 23.4 ms (medians per
+second) over 69 to 70 steady-state seconds per joiner, with every second inside the 50 ms budget (worst
+second 26 to 40 ms) and median p99 the same before and during the replay. Last signal to REV2, through
+the joiner's 10 ms send batches, held p50 24.5 to 26.6 ms and p99 39.2 to 41.0 ms (worst second 51 ms,
+budget 100 ms). Join-rate was 98.8 to 98.9% against 93.0 to 93.4% for a 5 s tumbling window on the same
+events, and posts were fully enriched at p50 316 to 317 ms after they were written (the models' own
+inference time), where the window would have written them out at p50 about 2.5 s. REV2 acted on about
+1,110 to 1,130 posts per run from their ML scores. All of this is the end-to-end lane through this demo
+code, not the broker alone. The broker's own tail latency and cost per billion events are measured with
+`iggy-bench` on dedicated machines (`bench/PLAN.md`).
 
 | File | What it is |
 |---|---|
@@ -86,9 +110,10 @@ CI_SAMPLE_PENDING
    without the late signal (`without a signal`), and `late` to count what came after. Try
    `signals_joiner.py --max-wait-s 15` to trade time for join-rate.
 3. **Move a joiner:** stop the four joiners and start eight with `--joiners 8`. Offsets are stored per
-   partition and topic, once a second, so each partition number's new owner resumes from there. Content
-   that was waiting for a signal at the stop is not rebuilt in this kit: its late signal is counted as an
-   orphan, and REV2 still saw it on the preliminary stream. Move ownership stop-then-start: there is no
+   partition and topic, once a second, so each partition number's new owner resumes from there. The kit
+   keeps waiting content in joiner memory and does not rebuild it, so content read again after the switch
+   can go out a second time (REV2 drops the repeat) or without a signal read before the stop; REV2 still
+   saw it on the preliminary stream. Move ownership stop-then-start: there is no
    fencing, so never run two joiners that claim one partition number.
 
 ## Shadow your own traffic
