@@ -15,11 +15,11 @@ for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; 
 pip install -q -r requirements.txt
 python -m py_compile common.py ctit_scorer.py attribution_nodes.py bid_log_flood.py kafka_bridge.py
 # The scorer starts first and creates the topics; the attribution nodes and the neighbour follow.
-# 2,500 clicks/s over 4 attribution nodes, 3% followed by an install 11-30 s later (about 75 installs/s); a new
+# 2,500 clicks/s over 4 attribution nodes, 4% followed by an install 11-30 s later (about 100 installs/s); a new
 # publisher injecting clicks on 80% of beginning installs every 10 s from second 25; 2 MB/s of bid logs from second 20.
 timeout 78 python -u ctit_scorer.py > ctit.log 2>&1 &
 sleep 3
-timeout 72 python -u attribution_nodes.py --nodes 4 --clicks 2500 --install-rate 0.03 --publishers 300 \
+timeout 72 python -u attribution_nodes.py --nodes 4 --clicks 2500 --install-rate 0.04 --publishers 300 \
   --incident-at 25 --hijack 0.8 > nodes.log 2>&1 &
 timeout 70 python -u bid_log_flood.py --mbps 2 --at 20 --duration 35 > bidlogs.log 2>&1 &
 wait || true
