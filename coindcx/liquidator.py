@@ -194,11 +194,18 @@ async def main(a):
                 await asyncio.sleep(a.poll_ms / 1000)
 
     async def cross_checker():
-        # Cross accounts whose marks moved, checked in slices so the read loops keep polling in between.
+        # Cross accounts whose marks moved, checked once the whole mark batch is in (or 50 ms after the first
+        # change, if marks arrive one by one), in slices so the read loops keep polling in between. Checking after
+        # every partition instead would re-check an account holding several instruments many times per batch.
+        since = None
         while True:
             await asyncio.sleep(0.001)
-            if not (dirty or complete) or not ready():
+            if not ready() or not (dirty or complete):
                 continue
+            since = since or time.monotonic()
+            if not complete and time.monotonic() - since < 0.05:
+                continue
+            since = None
             todo, done_b = list(dirty), list(complete)
             dirty.clear()
             complete.clear()
