@@ -64,7 +64,7 @@ if not m:
     raise SystemExit("could not read the last timeslice line")
 exact, checked, absorbed, resets, late, over, over_pct = (float(x.replace(",", "")) for x in m.groups())
 print(u[-1].strip())
-folds = nums(r"\(([0-9,]+)x fewer\)", u)
+folds = [f for f in nums(r"\(([0-9,]+)x fewer\)", u) if f > 0]   # a first timeslice of baselines folds nothing
 ins = nums(r"series in ([0-9,]+)", u)
 print("timeslices exact: %d of %d; retries absorbed: %d; counter resets handled: %d; late samples: %d; "
       "without the sequence check the aggregates would be +%.1f%% high" % (exact, checked, absorbed, resets, late, over_pct))
