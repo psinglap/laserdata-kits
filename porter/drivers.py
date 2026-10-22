@@ -21,10 +21,10 @@ import time
 from collections import defaultdict
 from datetime import timedelta
 
-from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, IggyExpiry, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import DirectProducerConfig, IggyClient, IggyExpiry, Partitioning, SendMessage
 
 from common import (CITY, DEFAULT_URL, FENCE_KM, MILESTONES, PICKUP_AREAS, PINGS, STREAM, TRIPS, VEHICLES, Window,
-                    driver, km, load, msg, part)
+                    driver, km, load, msg, part, read_partitions)
 
 TICK = 0.02   # seconds; each driver still pings on its own schedule, stamped when sent
 AREAS = list(PICKUP_AREAS.values())
@@ -61,7 +61,7 @@ def vehicle_mix(n):
 
 async def main(a):
     async def connected():
-        # One connection per producer and per consumer group, so a busy one never queues behind another.
+        # One connection per producer and per reader, so a busy one never queues behind another.
         c = IggyClient.from_connection_string(a.url)
         await c.connect()
         return c
@@ -77,10 +77,8 @@ async def main(a):
             await admin.create_topic(STREAM, MILESTONES, 8)
         except RuntimeError:
             pass                                               # created by trips.py in the meantime
-    arrivals = await (await connected()).consumer_group("drivers-arrival-check", STREAM, MILESTONES,
-                                                        polling_strategy=PollingStrategy.Next(), batch_length=2000,
-                                                        auto_commit=AutoCommit.Interval(timedelta(seconds=1)),
-                                                        poll_interval=timedelta(milliseconds=2))
+    arrivals = await connected()                              # the arrival check reads on its own connection
+    ms_parts = range((await admin.get_topic(STREAM, MILESTONES)).partitions_count)
 
     n_max = int(a.drivers * max(1.0, a.peak))
     pool = [Driver(i, v) for i, v in enumerate(vehicle_mix(n_max))]
@@ -202,7 +200,9 @@ async def main(a):
             for k in ("pings", "checked", "first", "late1", "late2", "missed", "unknown"):
                 stats[k] = 0
 
-    await asyncio.gather(drive(), arrivals.consume_messages(on_arrival, asyncio.Event()), report())
+    # Resumes where it left off, storing each partition's offset at most once a second.
+    await asyncio.gather(drive(), read_partitions(arrivals, MILESTONES, ms_parts, "drivers-arrival-check", on_arrival,
+                                                  commit_s=1.0, batch=2000, poll_ms=2), report())
 
 
 if __name__ == "__main__":

@@ -17,11 +17,9 @@ import asyncio
 import os
 import time
 from collections import defaultdict
-from datetime import timedelta
+from apache_iggy import IggyClient, Partitioning, SendMessage
 
-from apache_iggy import AutoCommit, IggyClient, Partitioning, PollingStrategy, SendMessage
-
-from common import DEFAULT_URL, FENCE_KM, MILESTONES, PINGS, STREAM, TRIPS, Window, km, load, msg, part
+from common import DEFAULT_URL, FENCE_KM, MILESTONES, PINGS, STREAM, TRIPS, Window, km, load, msg, part, read_partitions
 
 MS_PARTITIONS = 8
 
@@ -38,13 +36,9 @@ async def main(a):
         print("[trips] waiting for drivers.py to create the topics…", flush=True)
         await asyncio.sleep(1)
     started_ns = time.time_ns()
-    poll = dict(batch_length=5000, auto_commit=AutoCommit.Disabled())
-    pings = await (await connected()).consumer_group(f"trips-pings-{os.getpid()}", STREAM, PINGS,
-                                                    polling_strategy=PollingStrategy.First(),
-                                                    poll_interval=timedelta(microseconds=500), **poll)
-    trips = await (await connected()).consumer_group(f"trips-events-{os.getpid()}", STREAM, TRIPS,
-                                                    polling_strategy=PollingStrategy.First(),
-                                                    poll_interval=timedelta(milliseconds=2), **poll)
+    ping_parts = range((await admin.get_topic(STREAM, PINGS)).partitions_count)
+    trip_parts = range((await admin.get_topic(STREAM, TRIPS)).partitions_count)
+    pings, trips = await connected(), await connected()     # each reader on its own connection
     out = await (await connected()).producer(STREAM, MILESTONES, topic_partitions_count=MS_PARTITIONS)
 
     last = {}                                  # driver -> (seq, ns, lat, lon, order)
@@ -136,8 +130,10 @@ async def main(a):
                           f"broker->tracker p50 {fb['p50']:.1f} p99 {fb['p99']:.1f} ms", flush=True)
             stats.clear()
 
-    stop = asyncio.Event()
-    await asyncio.gather(pings.consume_messages(on_ping, stop), trips.consume_messages(on_trip, stop), flush(), report())
+    # Both readers rebuild from the first retained message on every start, so no offset is stored.
+    await asyncio.gather(read_partitions(pings, PINGS, ping_parts, f"trips-pings-{os.getpid()}", on_ping, replay=True, poll_ms=0.5),
+                         read_partitions(trips, TRIPS, trip_parts, f"trips-events-{os.getpid()}", on_trip, replay=True, poll_ms=2),
+                         flush(), report())
 
 
 if __name__ == "__main__":
