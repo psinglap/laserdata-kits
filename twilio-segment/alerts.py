@@ -51,7 +51,9 @@ def decide(current: str, w: KeyWindow, thr: float, a) -> str:
     """Stands in for your alert rule: the workspace's own successful-delivery threshold, over seconds."""
     allowance = 1.0 - thr                   # a 99% alert allows 1% of attempts to fail
     if current != ALERT:
-        return ALERT if w.failed >= a.min_failed and w.failed > allowance * w.n else RESOLVED
+        if w.failed >= a.min_failed and w.failed > allowance * w.n:
+            return ALERT
+        return RESOLVED
     if w.n >= a.min_attempts and w.failed < allowance / 2 * w.n:
         return RESOLVED
     return ALERT
