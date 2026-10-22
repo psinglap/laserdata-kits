@@ -76,16 +76,18 @@ they live in the labels service.
 moment its rules worker has evaluated it, through Python clients, on whatever machine you run it on.
 On a shared GitHub runner, with the broker and five Python processes on one box, at 3,000 actions a
 second from 200,000 users on 16 partitions (about 22 spam runs a second), two workers, and 8,000
-reindex documents a second next door from second 30, a CI run held action-to-verdict p50 8.9 to 9.0 ms,
-p99 15.7 to 15.9 ms and p99.9 16.8 ms (medians per second) over 70 steady-state seconds per worker,
-with every second inside the 50 ms budget (worst second 18.3 ms) and median p99 the same before and
-during the backfill. Action to result, through the worker's 20 ms send batches to the effect side, held
-p50 29 ms and p99 48 ms. Each worker added about 10 labels and rejected about 95 messages with the label
-in place every second; across about 2,000 users labelled per run, the effect side counted 0 messages
-let through after the label and 0 users labelled twice or by two workers, and no action was out of
-order, missing or on another partition. All of this is the end-to-end lane through this demo code, not
-the broker alone. The broker's own tail latency and cost per billion events are measured with
-`iggy-bench` on dedicated machines (`bench/PLAN.md`).
+reindex documents a second next door from second 30, two CI runs held action-to-verdict p50 6.6 to
+9.0 ms, p99 12.0 to 15.9 ms and p99.9 12.6 to 16.8 ms (medians per second) over 70 steady-state
+seconds per worker, with median p99 the same before and during the backfill. One run had every second
+inside the 50 ms budget (worst second 18 ms); the other had 1 second out of 70 over it, the same second
+on both workers (87 and 89 ms), which points at the shared runner rather than one worker. Action to
+result, through the worker's 20 ms send batches to the effect side, held p50 24 to 29 ms and p99 43 to
+48 ms. Each worker added about 10 labels and rejected about 95 messages with the label in place every
+second; across about 2,000 users labelled per run, the effect side counted 0 messages let through
+after the label and 0 users labelled twice or by two workers, and no action was out of order, missing
+or on another partition. All of this is the end-to-end lane through this demo code, not the broker
+alone. The broker's own tail latency and cost per billion events are measured with `iggy-bench` on
+dedicated machines (`bench/PLAN.md`).
 
 | File | What it is |
 |---|---|
