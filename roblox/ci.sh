@@ -64,7 +64,7 @@ for l in open("mm-2-restart.log"):
     if "rebuilt" in l:
         print(l.strip())
 # skip the warm-up, and the last seconds after the matchmakers have stopped (nothing placed)
-f = [l for l in open("fleet.log") if "joins requested" in l and not re.search(r"placed 0 ", l)][12:]
+f = [l for l in open("fleet.log") if "joins requested" in l and not re.search(r"\bplaced 0 \(", l)][12:]
 herd = [l for l in f if "(herd)" in l]
 def tot(lines):
     return [sum(nums(q, lines)) for q in (r"placed ([0-9,]+)", r"\) +bounced ([0-9,]+)", r"\) +bounced [0-9,]+ \(full ([0-9,]+)",
