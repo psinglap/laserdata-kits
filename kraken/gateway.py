@@ -102,28 +102,44 @@ async def main(a):
             await asyncio.sleep(a.poll_ms / 1000)
 
     async def replay():
-        # Resend requests, one at a time, on their own connection: read the missed reports back from the log.
+        # Resend requests, one at a time, on their own connection: read the missed reports back from the log. The
+        # index already holds the offset of every missed report, so the replay fetches only those offsets (one short
+        # range at a time) and decodes only those reports: scanning and decoding every report in the partition since
+        # the session dropped (up to thousands in a burst) would hold the event loop, and so every read loop, for
+        # milliseconds.
         c = await connect(a.url)
         who = Consumer.Single(f"{me}-replay")
         while True:
             k, frm, upto = await resends.get()
             s = sessions[k]
             got = []
-            start = next(((p, o) for q, p, o in index[k] if q == frm), None)
-            if start is None:
+            want = [(q, p, o) for q, p, o in index[k] if frm <= q <= upto]
+            if not want or want[0][0] != frm:
                 st["unrecoverable"] += 1       # older than the index: the client would need a full resync
             else:
-                pid, off = start
-                while len(got) < upto - frm + 1:
-                    ms = await c.poll_messages(STREAM, REPORTS, consumer=who, partition_id=pid, count=a.batch,
-                                               auto_commit=False, polling_strategy=PollingStrategy.Offset(off))
+                pid = want[0][1]               # an account's reports all live in one partition
+                offs = [o for _, _, o in want]
+                i = 0
+                while i < len(offs):
+                    off = offs[i]
+                    j = i                      # fetch up to the last wanted offset within the next 64
+                    while j + 1 < len(offs) and offs[j + 1] - off < 64:
+                        j += 1
+                    ms = await c.poll_messages(STREAM, REPORTS, consumer=who, partition_id=pid,
+                                               count=offs[j] - off + 1, auto_commit=False,
+                                               polling_strategy=PollingStrategy.Offset(off))
                     if not ms:
                         break
-                    for m in ms:
-                        r = load(m.payload())
-                        if r["k"] == k and frm <= r["seq"] <= upto and (not got or r["seq"] > got[-1]["seq"]):
-                            got.append(r)
-                    off = ms[-1].offset() + 1
+                    base = ms[0].offset()
+                    for o in offs[i:j + 1]:
+                        n = o - base
+                        m = ms[n] if 0 <= n < len(ms) and ms[n].offset() == o else next(
+                            (x for x in ms if x.offset() == o), None)
+                        if m is not None:
+                            r = load(m.payload())
+                            if r["k"] == k and (not got or r["seq"] > got[-1]["seq"]):
+                                got.append(r)
+                    i = j + 1
             for r in got:                       # resent with PossDupFlag=Y, in order
                 deliver(s, r["seq"])
                 st["resent"] += 1
