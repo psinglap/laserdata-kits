@@ -159,7 +159,9 @@ if __name__ == "__main__":
     p.add_argument("--budget-ms", type=float, default=50, help="p99 budget for ball-to-alert (before the push gateway)")
     p.add_argument("--late-s", type=float, default=30, help="after a restart, send a missed alert only if younger than this")
     p.add_argument("--tick-ms", type=float, default=5, help="record decided alerts once per this many ms")
-    p.add_argument("--poll-ms", type=float, default=1)
+    p.add_argument("--poll-ms", type=float, default=5,
+                   help="wait between reads of a partition when nothing more is waiting; 5 ms is a tenth of the alert "
+                        "budget and leaves the CPU to the commentary nodes on a shared box")
     p.add_argument("--batch", type=int, default=5000)
     p.add_argument("--audit", action="store_true", help="print the alerts-sent record's totals and exit")
     asyncio.run(main(p.parse_args()))
