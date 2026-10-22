@@ -77,7 +77,7 @@ for j in (0, 1):
               j, st.median(before), len(before), st.median(during), len(during)))
     if st.median(jr) < 97:
         print("joiner-%d median join-rate under 97%%" % j); bad = True
-r = [l for l in open("rev2.log") if re.search(r"\] +[1-9][0-9,]* enriched/s", l)][10:]
+r = [l for l in open("rev2.log") if re.search(r"\] +[1-9][0-9,]* enriched/s.* (PASS|FAIL) \(", l)][10:]
 if r:
     print("REV2 steady-state medians over %d s: enriched/s %.0f  last-signal-to-REV2 p50 %.1f ms  p99 %.1f ms  "
           "worst-second p99 %.1f ms  joiner-to-REV2 p99 %.1f ms  actions/s %.0f  time to action p50 %.0f ms  p99 %.0f ms" % (
@@ -85,7 +85,7 @@ if r:
           st.median(num(r"REV2 p50 +[0-9.]+ms +p99 +([0-9.]+)ms", r)), max(num(r"REV2 p50 +[0-9.]+ms +p99 +([0-9.]+)ms", r)),
           st.median(num(r"joiner-to-REV2 p99 +([0-9.]+)ms", r)), st.median(num(r"signals +([0-9,]+)/s", r)),
           st.median(num(r"action p50 +([0-9.]+)ms", r)), st.median(num(r"action p50 +[0-9.]+ms +p99 +([0-9.]+)ms", r))))
-    print("REV2 at the end:", r[-1].split("FAIL" if "FAIL (" in r[-1] else "PASS", 1)[-1].strip())
+    print("REV2 at the end:", re.split(r"(?:PASS|FAIL) \(<[0-9]+ms\)", r[-1], 1)[-1].strip())
 f = [l for l in open("content.log") if "posts and comments/s" in l]
 print("content: median %.0f posts and comments/s, %.0f signals/s" % (
       st.median(num(r"\] +([0-9,]+) posts", f)), st.median(num(r"([0-9,]+) signals/s", f))))

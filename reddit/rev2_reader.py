@@ -93,7 +93,8 @@ async def main(a):
                 st.clear()
                 continue
             r, h, t = lat.flush(), hop.flush(), tta.flush()
-            ok = "PASS" if r["p99"] < a.budget_ms else "FAIL"
+            # a second with no fully enriched content (only content past the wait limit) has no latency to judge
+            ok = "n/a" if not r["n"] else "PASS" if r["p99"] < a.budget_ms else "FAIL"
             print(f"[rev2] {st['content']:>5,} enriched/s  last-signal-to-REV2 p50 {r['p50']:5.1f}ms  p99 {r['p99']:5.1f}ms  "
                   f"p99.9 {r['p999']:5.1f}ms  {ok} (<{a.budget_ms:g}ms)  joiner-to-REV2 p99 {h['p99']:5.1f}ms  "
                   f"actioned on ML signals {st['actions']:>3,}/s ({total['actions']:,} total)  "
