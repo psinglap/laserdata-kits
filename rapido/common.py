@@ -7,7 +7,7 @@ import zlib
 STREAM = "captain-lane"
 PINGS, RIDES, OFFERS, PICKUP = "captain-pings", "ride-requests", "ride-offers", "pickup-track"
 COMMS = "rce-events"                        # a busy neighbour, for the campaign-burst test
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 CITY = (17.30, 78.30, 17.55, 78.60)        # a box over Hyderabad: lat_min, lon_min, lat_max, lon_max
 HOTSPOTS = {                                # where office and college peak requests start (illustrative)
     "HITEC City": (17.4435, 78.3772),

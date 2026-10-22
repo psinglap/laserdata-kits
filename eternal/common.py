@@ -10,7 +10,7 @@ KITCHEN = "kitchen-state"         # the lane: order accepted, food ready, picked
 ORDERS = "orders"                 # checkouts, each carrying the FPT prediction made for it
 REPLAY = "benchmark-replay"       # a heavy neighbour on the same broker, for the isolation test
 KITCHEN_PARTITIONS, ORDER_PARTITIONS = 16, 8
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 
 
 def restaurant(i: int) -> str:

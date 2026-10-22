@@ -8,7 +8,7 @@ STREAM = "trading"
 POSITIONS = "position-updates"       # the lane: every fill's resulting position, read by the Holdings service
 ORDER_UPDATES = "order-updates"      # the order update the app receives; it refreshes Holdings right after
 DATAPLATFORM = "dataplatform-events" # a heavy, latency-tolerant neighbour on the same broker
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 PARTITIONS = {POSITIONS: 16, ORDER_UPDATES: 16, DATAPLATFORM: 32}
 
 # From Groww's own post: the app refreshes Holdings as soon as the order update reaches it,

@@ -14,7 +14,7 @@ TICKS = "ticks"                      # one partition per exchange segment, so ea
 POSTBACKS = "order-postbacks"        # a busy neighbour, for the isolation test
 SEGMENTS = ["NSE", "NFO", "BSE", "MCX"]
 RETENTION = IggyExpiry.ExpireDuration(timedelta(hours=24))   # a trading day, for rebuilds and replay
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 
 # token, last price, last qty, avg price, volume, buy qty, sell qty, open, high, low, close | seq, created ns
 QUOTE = struct.Struct(">11i")

@@ -7,7 +7,7 @@ import zlib
 STREAM = "intracity"
 PINGS, TRIPS, MILESTONES = "driver-pings", "trip-events", "trip-milestones"   # the lane, order lifecycle, arrivals
 LOGS = "app-logs"                          # a busy neighbour, for the log-burst test
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 CITY = (12.86, 77.50, 13.08, 77.72)        # a box over Bengaluru: lat_min, lon_min, lat_max, lon_max
 PICKUP_AREAS = {                           # where goods are loaded: markets and industrial areas (illustrative)
     "KR Market": (12.9634, 77.5775),

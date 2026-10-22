@@ -7,7 +7,7 @@ import zlib
 STREAM = "last-mile"
 PINGS, LEGS, ETA = "partner-pings", "order-legs", "eta"   # the lane, trip state, ETAs for the tracking screen
 STORM = "order-events"                                     # a busy neighbour, for the retry-storm test
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 CITY = (12.86, 77.52, 13.06, 77.72)       # a box over Bengaluru: lat_min, lon_min, lat_max, lon_max
 SILK_BOARD = (12.9174, 77.6229)           # traffic slows inside 1.5 km of it (illustrative)
 

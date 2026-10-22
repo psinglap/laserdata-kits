@@ -5,7 +5,7 @@ import time
 STREAM = "search-domain"
 INVENTORY, PRICING, TAGS = "inventory", "pricing", "tags"   # P0, P0, P1
 ORDERS, STATUS = "orders", "order-status"
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 
 
 def key(hub: int, sku: int) -> str:

@@ -9,7 +9,7 @@ STREAM = "meecom"
 ORDER_UPDATES = "order-updates"      # the lane: order updates your services push to Meecom
 CAMPAIGN = "campaign-sends"          # promotional sends from campaign creators, on their own topic
 RECEIPTS = "send-receipts"           # Meecom's "sent" events, the first step of the Sent -> Delivered -> Clicked -> Read funnel
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 PARTITIONS = {ORDER_UPDATES: 16, CAMPAIGN: 32, RECEIPTS: 8}
 
 # The order states a shopper is told about, in order.

@@ -8,7 +8,7 @@ STREAM = "playback-health"
 HEARTBEATS = "heartbeats-lite"   # the lane in: minimized heartbeats (~1.1 KB), keyed by cohort and CDN
 SIGNALS = "cdn-health"           # the lane out: each cohort-CDN pair's health state, read by routing and alerting
 FULL = "heartbeats-full"         # a heavy, latency-tolerant neighbour: full ~7.5 KB heartbeats for full-data consumers
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 PARTITIONS = {HEARTBEATS: 16, SIGNALS: 4, FULL: 16}
 
 # Cohorts the way JioHotstar's traffic-orchestration post (Mar 2026) describes them: network plus

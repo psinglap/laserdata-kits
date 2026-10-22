@@ -8,7 +8,7 @@ STREAM = "payment-health"
 STATUS = "payment-status"        # the lane in: one event per payment, its final status, keyed by cohort
 SIGNALS = "downtime-signals"     # the lane out: each cohort's downtime state, read by Checkout and webhooks
 WORKFLOW = "workflow-events"     # a heavy, latency-tolerant neighbour: every workflow event, for the data lake
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 PARTITIONS = {STATUS: 16, SIGNALS: 4, WORKFLOW: 16}
 
 # Payment cohorts, named the way Razorpay's public Downtime API names instruments:

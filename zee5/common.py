@@ -8,7 +8,7 @@ HEARTBEATS = "heartbeats"            # the lane: one heartbeat per viewer every 
 RESUME_REQ = "resume-requests"       # a viewer opens a title on another device and asks where to resume
 RESUME_ANS = "resume-answers"        # the Continue Watching service answers with a position
 METADATA = "metadata"                # a busy neighbour: content publishing, for the release-drop test
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 DEVICES = ("android", "tv", "web", "ios")
 
 

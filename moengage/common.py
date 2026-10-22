@@ -17,7 +17,7 @@ STREAM = "smart-triggers"
 FIRES = "trigger-fires"              # campaign sends the evaluator decided on, for the channel senders
 FIRES_PARTITIONS = 8
 INGEST_STREAM, UNIFIED = "ingestion", "unified-events"   # the bulk ingestion firehose, next door
-DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090"
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"
 RETENTION = IggyExpiry.ExpireDuration(timedelta(hours=6))  # enough to replay a trigger window, not a data lake
 
 # Trigger events and the share of all events each one is. The rest of the SDK and API traffic
