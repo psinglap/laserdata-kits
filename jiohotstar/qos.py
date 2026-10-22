@@ -1,6 +1,7 @@
 """The health check: a playback health score per cohort and CDN, and a signal the moment it falls.
 
-Reads `heartbeats-lite` (the lane in) on its own connection and consumer group, keeps the last
+Reads `heartbeats-lite` (the lane in) on its own connection with direct reads on every partition (no
+consumer group, which queues a poll per partition and adds tail latency), keeps the last
 --window heartbeats of every cohort|cdn pair, and every --every-ms scores it the way JioHotstar's
 traffic-orchestration post (Mar 2026) describes the QoS Routing Manager: playback failure rate,
 rebuffering and RTT mapped to scores by a linear piecewise function, a cumulative score weighted
@@ -23,9 +24,10 @@ import time
 from collections import defaultdict, deque
 from datetime import timedelta
 
-from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import DirectProducerConfig, IggyClient, Partitioning, SendMessage
 
-from common import DEFAULT_URL, HEARTBEATS, PARTITIONS, SIGNALS, STREAM, Window, ensure_topics, load, msg, part
+from common import (DEFAULT_URL, HEARTBEATS, PARTITIONS, SIGNALS, STREAM, Window, ensure_topics, load, msg, part,
+                    read_partitions)
 
 BUCKETS = [(0.90, "Ideal"), (0.75, "Baseline"), (0.55, "Sev3"), (0.35, "Sev2"), (-1.0, "Sev1")]
 
@@ -46,9 +48,7 @@ async def main(a):
         return c
 
     await ensure_topics(await own_client(), HEARTBEATS, SIGNALS)
-    beats = await (await own_client()).consumer_group(
-        f"{a.name}-{os.getpid()}", STREAM, HEARTBEATS, polling_strategy=PollingStrategy.First(), batch_length=5000,
-        auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+    beats = await own_client()              # direct partition reads; replays from the start, so no stored offset
     signals = await (await own_client()).producer(
         STREAM, SIGNALS, topic_partitions_count=PARTITIONS[SIGNALS],
         mode=DirectProducerConfig(batch_length=500, linger_time=timedelta(microseconds=200)))
@@ -154,7 +154,8 @@ async def main(a):
                   f"signals sent {stats['signals']}", flush=True)
             stats["signals"] = 0
 
-    await asyncio.gather(beats.consume_messages(on_heartbeat, asyncio.Event()), check(), report())
+    await asyncio.gather(read_partitions(beats, HEARTBEATS, range(PARTITIONS[HEARTBEATS]), f"{a.name}-{os.getpid()}",
+                                         on_heartbeat, replay=True, poll_ms=0.5), check(), report())
 
 
 if __name__ == "__main__":

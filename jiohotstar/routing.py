@@ -1,6 +1,7 @@
 """Routing: CDN health signals applied to where new plays go, and the cost of a late signal counted.
 
-Reads `cdn-health` (the lane out) on its own connection and consumer group and keeps the current
+Reads `cdn-health` (the lane out) on its own connection with direct reads on every partition (no
+consumer group) and keeps the current
 state of every cohort|cdn pair, ignoring any older or repeated sequence. It stands in for the readers
 of that signal: the QoS Routing Manager that sets CDN weights per cohort, and real-time alerting
 (run a second copy with --name alerting). Your routing manager keeps its own guards (hard ASN
@@ -24,20 +25,16 @@ import os
 import random
 import time
 from collections import defaultdict, deque
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy
+from apache_iggy import IggyClient
 
-from common import CDNS, DEFAULT_URL, SIGNALS, STREAM, Window, cohorts, ensure_topics, load
+from common import CDNS, DEFAULT_URL, PARTITIONS, SIGNALS, STREAM, Window, cohorts, ensure_topics, load, read_partitions
 
 
 async def main(a):
     client = IggyClient.from_connection_string(a.url)   # this reader's own connection
     await client.connect()
     await ensure_topics(client, SIGNALS)
-    signals = await client.consumer_group(
-        f"{a.name}-{os.getpid()}", STREAM, SIGNALS, polling_strategy=PollingStrategy.First(), batch_length=1000,
-        auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
     table = cohorts()
     names, cum = [c for c, _ in table], list(itertools.accumulate(w for _, w in table))
     cdns, cdn_cum = [c for c, _ in CDNS], list(itertools.accumulate(w for _, w in CDNS))
@@ -118,7 +115,9 @@ async def main(a):
                   f"healthy again {total['healthy']}, plays sent after the flag {total['late']})", flush=True)
             stats.clear()
 
-    await asyncio.gather(signals.consume_messages(on_signal, asyncio.Event()), plays(), report())
+    # Direct partition reads; replays from the start (the newest state per pair wins), so no stored offset.
+    await asyncio.gather(read_partitions(client, SIGNALS, range(PARTITIONS[SIGNALS]), f"{a.name}-{os.getpid()}",
+                                         on_signal, replay=True, batch=1000, poll_ms=0.5), plays(), report())
 
 
 if __name__ == "__main__":
