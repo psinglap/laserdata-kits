@@ -72,14 +72,14 @@ the send and the read.
 **What the numbers mean.** The kit times each event from the moment `docks.py` creates it to the moment
 `dock_check.py` has checked it, and each alert from the load scan that raised it to all three notifiers, through
 Python clients, on whatever machine you run it on. On a shared 2-vCPU CI runner with the broker and all scripts on
-one box, at about 910 events a second (2,000 docks, a scan every 2–4 s, loading time compressed to 12–30 bags a
+one box, at about 920 events a second (2,000 docks, a scan every 2–4 s, loading time compressed to 12–30 bags a
 trailer so trailers turn over inside the minute, and plan revisions and wrong carts raised so misloads happen often
-enough to judge), three runs held scan-to-check p50 3.0–5.8 ms, p99 5.8–10.9 ms and p99.9 6.5–12.6 ms, with all
-183 steady-state seconds inside 100 ms, and scan-to-handheld (both hops) p50 5.5–8.4 ms and p99 8.3–13.5 ms. Of
-1,024 to 1,112 misloads per run, every one reached the loader's handheld before that loader's next scan and before
-the seal, with no false alert and none missed; a lane 5 s behind would have caught 15–17% of them before the next
+enough to judge), three runs held scan-to-check p50 2.7–5.8 ms, p99 5.4–10.7 ms and p99.9 6.2–12.3 ms, with all
+182 steady-state seconds inside 100 ms, and scan-to-handheld (both hops) p50 5.3–8.5 ms and p99 8.1–13.4 ms. Of
+1,011 to 1,096 misloads per run, every one reached the loader's handheld before that loader's next scan and before
+the seal, with no false alert and none missed; a lane 5 s behind would have caught 13–17% of them before the next
 scan (only the loader's last bag before a seal). With 2 MB/s of CDC changes on the same broker, the lane's p99
-moved by 0.5–0.8 ms. That is the end-to-end loop through this demo code, not the broker alone. The broker's own
+moved by 0.4–1.1 ms. That is the end-to-end loop through this demo code, not the broker alone. The broker's own
 tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines. The rule in the kit is a
 stand-in that takes no time; yours adds its own.
 
