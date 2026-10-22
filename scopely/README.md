@@ -61,16 +61,17 @@ hours to under a minute so finishes happen while you watch. All of these are ill
 On a real Apache Iggy 0.9.0 broker on a shared 2-vCPU GitHub runner, with the broker and every script on one box, at
 reduced scale (6,752 players in 422 races arriving over 15 s, about 2,750 rolls a second at full rate on 16
 partitions, two race owners with 8 partitions each, 4 game servers, a 600-point track, 0.5% of rolls sent twice,
-2 MB/s of client analytics next door from second 30), run 39708381177:
+2 MB/s of client analytics next door from second 30), five green runs of the same code (runs 39708381177,
+39710308052, 39711061016, 39711763829, 39711769030), as ranges:
 
 | | Result |
 |---|---|
-| Roll to race owner | p50 8.2–8.4 ms, p99 15.5–15.8 ms, p99.9 18.2–19.1 ms (medians of per-second values); worst second p99 17.6–18.5 ms; 140 of 140 steady-state seconds inside the 50 ms budget |
-| Roll to every game server (both hops) | p50 13.2 ms, p99 21.8 ms |
-| Analytics next door | owner p99 15.3–15.7 ms before, 15.6–15.8 ms with 2 MB/s on the same broker |
-| Places | 5,063 finishes; every place the owners announced matched the race rules run on the rolls in send order |
-| Retries | 885 retried rolls counted once |
-| Decided races | Of 35,413 first taps after a team finished or a race ended, 145 (0.41%) rolled before that game server had the news; with a race view refreshed 2 s behind it would have been 24,676 (69.7%) |
+| Roll to race owner | p50 8.0–8.4 ms, p99 15.1–16.0 ms, p99.9 18.0–19.1 ms (medians of per-second values); worst second p99 16.9–23.8 ms; 698 of 698 steady-state seconds inside the 50 ms budget |
+| Roll to every game server (both hops) | p50 12.5–13.3 ms, p99 20.5–22.0 ms |
+| Analytics next door | owner p99 15.3–15.7 ms before, 15.6–15.8 ms with 2 MB/s on the same broker (first two runs) |
+| Places | 5,056–5,092 finishes per run; every place the owners announced matched the race rules run on the rolls in send order |
+| Retries | 885–976 retried rolls per run, each counted once |
+| Decided races | Of about 35,400–35,650 first taps per run after a team finished or a race ended, 0.31–0.41% rolled before that game server had the news; with a race view refreshed 2 s behind it would have been 69.0–69.7% |
 
 What the numbers mean: each roll is timed from creation in `game_servers.py` to the race owner, and each lap,
 finish and race end from the roll that caused it to every game server, through Python clients on a busy shared
