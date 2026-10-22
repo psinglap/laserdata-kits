@@ -59,15 +59,17 @@ for the next write) to the moment a `matchmaker.py` has applied it to its index,
 whatever machine you run it on. On a shared 2-vCPU GitHub runner with the broker and all four scripts on one box
 (about 1,500 servers of 60 places in 6 edge data centers, 100 players pressing Play a second, a creator update
 with a 10× herd for 15 s, 2 MB/s of analytics events next door, two matchmakers, one restarted), the medians of
-the steady-state seconds over two green runs on the final code were p50 5.3–6.7 ms, p99 13.9–16.3 ms and p99.9
-16.3–19.5 ms on each matchmaker, at about 690 server changes a second (about 1,600 in the herd). Every
-steady-state second passed the 50 ms budget (65 of 65 and 53 of 53 per matchmaker in both runs); the worst second
-reached 28.8–48.1 ms. The restarted matchmaker rebuilt its index from the log (1,813–1,821 servers, about 19,600
-changes) in 0.10–0.18 s before it took a join. Of about 19,900 placements checked against the servers, 21
-(0.11%) bounced, 18–19 of them at the moment of the update, sent to servers closing within milliseconds of the
-pick. The same matchmakers' index copies refreshed every 3 s would have bounced 3,953–4,117 joins (19.9–20.8%)
-and found no open server for 9,651–9,746 (48.5–49.2%), because the servers started for the herd filled before the
-next refresh. Press-to-placement was p50 7.3–8.1 ms and p99 12.6–14.8 ms. That is the end-to-end lane through this
+the steady-state seconds over five green runs on the final code were p50 5.3–9.4 ms, p99 13.8–21.2 ms and p99.9
+16.4–24.8 ms on each matchmaker, at about 690 server changes a second (about 1,600 in the herd). Every
+steady-state second passed the 50 ms budget (65 of 65 and 53 of 53 per matchmaker in all five runs); the worst
+second reached 38.0–49.8 ms. The restarted matchmaker rebuilt its index from the log (1,812–1,823 servers, about
+19,700 changes) in 0.14–0.23 s before it took a join. Of about 19,900 placements checked against the servers,
+23–41 (0.12–0.21%) bounced, 18–38 of them at the moment of the update, sent to servers closing within
+milliseconds of the pick. The same matchmakers' index copies refreshed every 3 s, judged against the same server
+state, would have bounced 2,876–3,017 joins (14.5–15.2%) in four of the five runs, most of them to servers already
+shutting down for the update; in the fifth, where the 3 s refresh fell just after the update, 607 (3.1%). They
+found no open server for 48.2–49.8% of joins (60.0% in the fifth run), because the servers started for the herd
+filled before the next refresh. Press-to-placement was p50 7.4–10.3 ms and p99 13.4–18.1 ms. That is the end-to-end lane through this
 demo code at reduced scale, not the broker alone, and the comparison is the kit's model, not a Roblox figure. One
 Python reader tops out near 4,000 changes/s on that runner; past it, the reader falls behind, not the broker. The
 broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
