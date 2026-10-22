@@ -12,7 +12,8 @@ the placements. Prints a line a second:
     had the new one (latency x the node's auction rate on that placement), per second and per million;
     after a raise they sell below the new floor (and the rupees CPM they give away, at --fill), after a
     drop they go unfilled under a floor that is now too high; next to what the same steps would cost if
-    the node picked floors up a second later;
+    the node picked every floor up a full second late ("1 s behind"; a table refreshed once a second
+    would be about 0.5 s stale on average, so about half that);
   * gaps: a missing sequence number for a placement (must stay 0).
 
 On start it rebuilds the table by replaying the last --replay-s seconds of the log (one rolling snapshot
@@ -125,7 +126,7 @@ async def main(a):
                   f"p99.9 {r['p999']:5.2f}ms  {ok} (<{a.budget_ms:g}ms)  steps {st['steps']:,}  "
                   f"stale-floor auctions {stale:,.2f}/s ({per_m:.2f} per 1M): below floor {st['below']:,.2f}, "
                   f"unfilled {st['unfilled']:,.2f}, Rs {st['rs']:,.3f} given away  "
-                  f"at a 1 s refresh {st['stale_1s']:,.0f}/s, Rs {st['rs_1s']:,.2f}  gaps {st['gaps']}  "
+                  f"1 s behind {st['stale_1s']:,.0f}/s, Rs {st['rs_1s']:,.2f}  gaps {st['gaps']}  "
                   f"placements {len(table):,}", flush=True)
             if not told and time.monotonic() - caught[0] >= 10:
                 told = True

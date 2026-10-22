@@ -33,7 +33,7 @@ prints its p99 every second, next to the cost of being late: callouts sent to a 
 stopped bidding on that segment. The log adds rebuilds: a shaping pod that starts or is rescheduled reads
 the last minute of the log and has every pair, including ones that have not changed for minutes.
 
-We don't know how your shaper gets its demand signal today; the kit's "at a 1 s refresh" figure is a
+We don't know how your shaper gets its demand signal today; the kit's "1 s behind" figure is a
 comparison, not a claim about your system.
 
 ## Run it
@@ -54,13 +54,14 @@ Each prints a line a second:
 
 ```
 [shaper-1] 20,000 changes/s  exchange-to-shaper p50 …ms  p99 …ms  p99.9 …ms  PASS (<20ms)  flips 200
-           wasted callouts …/s (… per 1M)  at a 1 s refresh …/s  bids held back …/s  gaps 0  pairs 300,000
+           wasted callouts …/s (… per 1M)  1 s behind …/s  bids held back …/s  gaps 0  pairs 300,000
 [exchange] 20,000 appetite changes/s  flips 200  … writes  write ack p50 …ms  p99 …ms
 ```
 
 - **wasted callouts:** requests this node sent to a DSP after it stopped bidding on that segment, before
   the node knew (latency × the node's request rate on that pair), per second and per million callouts;
-  **at a 1 s refresh:** the same flips if the node learned of them a second later.
+  **1 s behind:** the same flips if every one reached the node a full second late. A table refreshed once
+  a second would be about 0.5 s stale on average, so would waste about half that.
 - **bids held back:** requests not sent to a DSP that had started bidding again, times its bid rate.
 - **gaps:** a missing sequence number for a pair; must stay 0.
 
@@ -73,8 +74,8 @@ segments), two green CI runs held a median per-second p50 of
 seconds passed the 20 ms budget in each run, and the one slow second (21 to 39 ms) came as the restarted
 node replayed the log on the same two CPUs. A 4× auction-log burst next door (to 4 MB/s) moved the median
 p99 by less than 0.05 ms. About 48 flips a second cost a median of 3.9 to 4.5 wasted callouts a second
-(15 to 18 per million callouts) at 20,000 requests/s per node; had the same flips arrived a second later,
-about 1,030 to 1,070. The restarted node rebuilt all 12,000 pairs from the last 20 s of the log (about
+(15 to 18 per million callouts) at 20,000 requests/s per node; had every flip arrived a full second later,
+about 1,030 to 1,070 (a once-a-second refresh, about 0.5 s stale on average, would be about half that). The restarted node rebuilt all 12,000 pairs from the last 20 s of the log (about
 51,600 changes) in 0.46 to 0.64 s; 10 s of live changes alone would have covered 57% of them. No sequence
 gaps.
 That is the end-to-end lane through this demo code, not the broker alone; the broker's own tail latency is

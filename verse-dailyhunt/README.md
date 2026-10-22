@@ -36,7 +36,7 @@ the cost of being late: stale-floor auctions, and the rupees given away below a 
 rebuilds: a bid node added during the spike reads the last minute of the log and has every placement's
 floor, including ones that have not changed for minutes.
 
-We don't know how NexVerse.ai sets or distributes floors today; the kit's "at a 1 s refresh" figure is a
+We don't know how NexVerse.ai sets or distributes floors today; the kit's "1 s behind" figure is a
 comparison, not a claim about your system.
 
 ## Run it
@@ -59,7 +59,7 @@ Each prints a line a second:
 ```
 [bidnode-1]  5,000 floor changes/s  floor-to-node p50 …ms  p99 …ms  p99.9 …ms  PASS (<20ms)  steps 100
              stale-floor auctions …/s (… per 1M): below floor …, unfilled …, Rs … given away
-             at a 1 s refresh …/s, Rs …  gaps 0  placements 30,000
+             1 s behind …/s, Rs …  gaps 0  placements 30,000
 [floors]  5,000 floor changes/s  steps 100  … writes  write ack p50 …ms  p99 …ms  breaking news: hi x4
 ```
 
@@ -67,7 +67,9 @@ Each prints a line a second:
   had the new floor (latency × the node's auction rate on that placement), per second and per million
   auctions. **below floor:** after a raise, sold below the new floor; **Rs given away:** those sales times
   the floor difference, at `--fill`. **unfilled:** after a drop, auctions run under a floor that is now too
-  high. **at a 1 s refresh:** the same steps if the node picked them up a second later.
+  high. **1 s behind:** the same steps if the node picked
+  every one up a full second late. A table refreshed once a second would be about 0.5 s stale on average,
+  so would cost about half that.
 - **gaps:** a missing sequence number for a placement; must stay 0.
 
 **What the numbers mean.** The kit times each floor from the moment the floor service set it (including its
@@ -80,7 +82,8 @@ nodes and the ad-event log all on one box, at about 2,050 floor changes/s over 1
 (floor changes up from about 2,050 to 2,460 a second) with a 4× ad-event burst next door (to 4 MB/s) moved
 the median p99 by 0.3 to 0.6 ms. About 48 steps a second put a median of 0.42 to 0.43 auctions a second on
 a stale floor (about 21 per million) at 20,000 auctions/s per node, giving away about Rs 0.007 a second;
-had the same steps arrived a second later, about 80 auctions and Rs 1.3 a second. The node added as the
+had every step arrived a full second later, about 80 auctions and Rs 1.3 a second (a once-a-second
+refresh, about 0.5 s stale on average, would be about half that). The node added as the
 spike started rebuilt all 12,000 placements from the last 20 s of the log (about 50,500 changes) in 0.62 to
 0.68 s; 10 s of live changes alone would have covered 74% of them. No sequence gaps.
 That is the end-to-end lane through this demo code, not the broker alone; the broker's own tail latency is

@@ -11,8 +11,9 @@ segment. Prints a line a second:
   * exchange-to-shaper latency (change seen at the exchange -> applied here), with PASS or FAIL
     against --budget-ms;
   * wasted callouts: requests sent to a DSP after it stopped bidding on that segment, before this
-    node knew (per second, and per million callouts), next to what the same flips would waste if the
-    table refreshed once a second;
+    node knew (per second, and per million callouts), next to what the same flips would waste on a lane
+    that delivered every change a full second late ("1 s behind"; a table refreshed once a second would
+    be about 0.5 s stale on average, so about half that);
   * bids held back: requests not sent to a DSP that had started bidding again, before this node knew,
     times its bid rate;
   * gaps: a missing sequence number for a pair (must stay 0).
@@ -120,7 +121,7 @@ async def main(a):
             per_m = 1e6 * st["wasted"] / callouts if callouts else 0.0
             print(f"[{a.name}] {n:>7,} changes/s  exchange-to-shaper p50 {r['p50']:5.2f}ms  p99 {r['p99']:5.2f}ms  "
                   f"p99.9 {r['p999']:5.2f}ms  {ok} (<{a.budget_ms:g}ms)  flips {st['flips']:,}  "
-                  f"wasted callouts {st['wasted']:,.1f}/s ({per_m:.2f} per 1M)  at a 1 s refresh {st['wasted_1s']:,.0f}/s  "
+                  f"wasted callouts {st['wasted']:,.1f}/s ({per_m:.2f} per 1M)  1 s behind {st['wasted_1s']:,.0f}/s  "
                   f"bids held back {st['held']:,.2f}/s  gaps {st['gaps']}  pairs {len(table):,}", flush=True)
             if not told and time.monotonic() - caught[0] >= 10:
                 told = True

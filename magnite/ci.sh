@@ -78,10 +78,10 @@ for name in ("shaper-1", "shaper-2-restart"):
     p99 = nums(r"p99 +([0-9.]+)ms", t)
     med = lambda pat: st.median(nums(pat, t) or [float("nan")])
     print("%s steady-state medians over %d s: changes/s %.0f  exchange-to-shaper p50 %.2f ms  p99 %.2f ms  p99.9 %.2f ms  "
-          "worst-second p99 %.2f ms  flips/s %.0f  wasted callouts/s %.2f (%.3f per 1M)  at a 1 s refresh %.0f/s" % (
+          "worst-second p99 %.2f ms  flips/s %.0f  wasted callouts/s %.2f (%.3f per 1M)  1 s behind %.0f/s" % (
           name, len(t), med(live), med(r"p50 +([0-9.]+)ms"), med(r"p99 +([0-9.]+)ms"), med(r"p99.9 +([0-9.]+)ms"),
           max(p99 or [float("nan")]), med(r"flips ([0-9,]+)"), med(r"wasted callouts ([0-9,.]+)/s"),
-          med(r"\(([0-9.]+) per 1M\)"), med(r"at a 1 s refresh ([0-9,]+)/s")))
+          med(r"\(([0-9.]+) per 1M\)"), med(r"1 s behind ([0-9,]+)/s")))
 rows = nums(r"p99 +([0-9.]+)ms", [l for l in open("shaper-1.log") if re.search(live, l)])
 if len(rows) > 56:   # the auction log bursts 4x from its second 40 to 55, about shaper-1's seconds 40 to 55
     print("shaper-1 p99, median per second: before the auction-log burst %.2f ms (s 20-38), during it %.2f ms (s 42-54)" % (

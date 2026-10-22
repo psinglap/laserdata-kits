@@ -75,11 +75,11 @@ for name in ("bidnode-1", "bidnode-3"):
     med = lambda pat: st.median(nums(pat, t) or [float("nan")])
     print("%s steady-state medians over %d s: floor changes/s %.0f  floor-to-node p50 %.2f ms  p99 %.2f ms  p99.9 %.2f ms  "
           "worst-second p99 %.2f ms  steps/s %.0f  stale-floor auctions/s %.3f (%.3f per 1M)  Rs given away/s %.4f  "
-          "at a 1 s refresh %.0f/s, Rs %.2f/s" % (
+          "1 s behind %.0f/s, Rs %.2f/s" % (
           name, len(t), med(live), med(r"p50 +([0-9.]+)ms"), med(r"p99 +([0-9.]+)ms"), med(r"p99.9 +([0-9.]+)ms"),
           max(p99 or [float("nan")]), med(r"steps ([0-9,]+)"), med(r"stale-floor auctions ([0-9,.]+)/s"),
-          med(r"\(([0-9.]+) per 1M\)"), med(r"Rs ([0-9,.]+) given away"), med(r"at a 1 s refresh ([0-9,]+)/s"),
-          med(r"at a 1 s refresh [0-9,]+/s, Rs ([0-9,.]+)")))
+          med(r"\(([0-9.]+) per 1M\)"), med(r"Rs ([0-9,.]+) given away"), med(r"1 s behind ([0-9,]+)/s"),
+          med(r"1 s behind [0-9,]+/s, Rs ([0-9,.]+)")))
 rows = nums(r"p99 +([0-9.]+)ms", [l for l in open("bidnode-1.log") if re.search(live, l)])
 if len(rows) > 56:   # breaking news and the ad-event burst run from floors.py's second 40 to 55, about bidnode-1's 36 to 51
     print("bidnode-1 p99, median per second: before breaking news %.2f ms (s 15-33), during it %.2f ms (s 38-50)" % (
