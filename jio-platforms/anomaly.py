@@ -79,7 +79,7 @@ async def main(a):
         n = len(w)
         fr = sum(f for f, _ in w) / n
         dur = sum(d for _, d in w) / n
-        return 0.7 * piecewise(fr, 0.01, 0.15) + 0.3 * piecewise(dur, 60, 400), fr
+        return 0.7 * piecewise(fr, 0.02, 0.20) + 0.3 * piecewise(dur, 60, 400), fr
 
     def alert(k, now, fr):
         st, sev, since = state[k]

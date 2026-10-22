@@ -54,7 +54,7 @@ async def main(a):
             fail = random.random() < a.incident_fail
             dur = random.randint(250, 900)
         else:
-            fail = random.random() < 0.005
+            fail = random.random() < 0.002
             dur = random.randint(8, 60)
         seq[k] += 1
         stats["records"] += 1

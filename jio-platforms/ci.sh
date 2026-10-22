@@ -67,6 +67,10 @@ print("incidents at the workflow engine: %d flagged, %d healthy again; detection
 f = [l for l in open("ran.log") if re.search(r"\] +[1-9][0-9,]* msgs/s", l)]
 if f:
     print("RAN counters neighbour: %d s, median %.1f MB/s on its own topic" % (len(f), st.median(num(r"~([0-9.]+) MB/s", f))))
+false_alarms = len(flags) - len(win)       # flagged with no injected incident behind it
+print("false alarms (flagged with no injected incident): %d" % false_alarms)
+if false_alarms > 1:
+    raise SystemExit("the anomaly check flagged healthy instances")
 if len(flags) < 2 or healthy < 1:
     raise SystemExit("incidents did not reach the workflow engine and clear")
 if late > 2 * len(flags):
