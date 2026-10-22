@@ -149,15 +149,17 @@ async def main(a):
                     stats["false_refuel"] += 1
                 return
             stats["drain_alerts"] += 1
+            src = t - (time.time_ns() - d["src_ns"]) / 1e9     # when the ping that raised it was taken
             if s.draining(t):
                 stats["while_draining"] += 1        # the owner can still call the driver or the dhaba
                 stats["litres_left"] += s.d_rate * (s.d_end - t)
-                src = t - (time.time_ns() - d["src_ns"]) / 1e9
                 if s.d_end - src > a.compare_s:     # a lane this much slower would still have found it running
                     stats["at_compare"] += 1
                     stats["litres_compare"] += s.d_rate * (s.d_end - src - a.compare_s)
             elif t - s.last_drain < 900:
-                stats["late"] += 1                  # the drain had already ended (detection, not the lane)
+                stats["late"] += 1                  # the drain had already ended when the alert arrived
+                if src < s.last_drain:
+                    stats["late_lane"] += 1         # ... though its ping was taken while it ran: the lane's delay
             else:
                 stats["false_drain"] += 1           # no drain on this truck: a false alarm
         return on_alert
@@ -240,7 +242,7 @@ async def main(a):
                   f"draining {int(stats['while_draining']):,} (at {a.compare_s:g} s it would be "
                   f"{int(stats['at_compare']):,})  litres still in the tank {stats['litres_left']:,.0f} "
                   f"(at {a.compare_s:g} s {stats['litres_compare']:,.0f})  after the drain ended "
-                  f"{int(stats['late']):,}  false drain alerts {int(stats['false_drain']):,}  "
+                  f"{int(stats['late']):,} (lane delay {int(stats['late_lane']):,})  false drain alerts {int(stats['false_drain']):,}  "
                   f"refuels recorded {int(stats['refuels']):,} (false {int(stats['false_refuel']):,})  "
                   f"ping-to-notifiers n {r['n']:,} p50 {r['p50']:.1f}ms p99 {r['p99']:.1f}ms  {stalls.read()}",
                   flush=True)

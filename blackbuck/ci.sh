@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # CI smoke test: start Apache Iggy 0.9.0, run the fuel alert loop at small scale for about a minute, with
 # low-network history uploads next to it, and pass only if the fuel ping lane reports PASS, drain alerts reach the
-# owner app while the fuel is still being drained, and no truck that wasn't drained or refuelled raises an alert.
+# owner app while the fuel is still being drained (none delayed past the drain's end by the lane), and no truck that
+# wasn't drained or refuelled raises an alert.
 set -euo pipefail
 cd "$(dirname "$0")"
 trap 'docker compose logs --tail 40 iggy || true' ERR
@@ -60,13 +61,15 @@ slow = sum(nums(r"it would be ([0-9,]+)\)", f))
 left = sum(nums(r"litres still in the tank ([0-9,]+) ", f))
 left_slow = sum(nums(r"litres still in the tank [0-9,]+ \(at [0-9.]+ s ([0-9,]+)\)", f))
 late = sum(nums(r"after the drain ended ([0-9,]+)", f))
+late_lane = sum(nums(r"\(lane delay ([0-9,]+)\)", f))
 false = sum(nums(r"false drain alerts ([0-9,]+)", f))
 refuels = sum(nums(r"refuels recorded ([0-9,]+) ", f))
 false_ref = sum(nums(r"refuels recorded [0-9,]+ \(false ([0-9,]+)\)", f))
 print("drain alerts at the owner app: %d  while the fuel was still being drained: %d (%.1f%%)  at a 60 s lane: %d" % (
     alerts, running, 100 * running / max(alerts, 1), slow))
-print("litres still in the tanks when the alerts arrived: %d  (at a 60 s lane: %d)  alerts after the drain had ended: %d" % (
-    left, left_slow, late))
+print("litres still in the tanks when the alerts arrived: %d  (at a 60 s lane: %d)" % (left, left_slow))
+print("alerts after the drain had ended: %d (detected after it ended, from smoothing and the ping interval: %d; "
+      "ping taken while draining but delivered after: %d)" % (late, late - late_lane, late_lane))
 print("false drain alerts: %d  refuels recorded: %d  false refuels: %d" % (false, refuels, false_ref))
 if alerts < 50:
     raise SystemExit("too few drain alerts to judge the loop")
@@ -74,8 +77,12 @@ if false or false_ref:
     raise SystemExit("a truck that was not drained or refuelled raised an alert")
 if refuels < 1:
     raise SystemExit("no refuels recorded")
-if running * 100 < alerts * 95:
-    raise SystemExit("more than 5% of drain alerts reached the owner app after the drain had ended")
+# A drain the rules only see after it ended (smoothing, ping interval) is the rules' business; a drain alert raised
+# while the fuel was going and delivered after it stopped is the lane's. That one must stay at (nearly) zero.
+if late_lane * 100 > alerts:
+    raise SystemExit("more than 1% of drain alerts raised during a drain reached the owner app after it had ended")
+if running * 100 < alerts * 85:
+    raise SystemExit("fewer than 85% of drain alerts arrived while the fuel was still being drained")
 d = [l for l in f if re.search(r"ping-to-notifiers n [1-9]", l)]
 if not d:
     raise SystemExit("no alerts reached the notifiers")
