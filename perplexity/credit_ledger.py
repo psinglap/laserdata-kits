@@ -15,8 +15,9 @@ purchased. As credits arrive it decides:
 and publishes each pause and resume on credit-decisions, which every agent runner reads (agent_runners.py).
 
 Prints action-to-ledger p50/p99/p99.9 every second, with PASS/FAIL against --budget-ms, and the business number:
-credits past zero, the agent work done for accounts that had already run out, because the action or the pause
-was still in flight.
+credits past zero, the agent actions run for an account after its balance had already reached zero, because the
+action or the pause was still in flight. (The action that spends the last credits is let finish; its remainder
+is written off and not counted, since no lane could have stopped it.)
 """
 import argparse
 import asyncio
@@ -103,15 +104,17 @@ async def main(a):
         cost = r["cr"] - last.get(k, 0)
         last[k] = r["cr"]
         stats["events"] += 1
+        empty = st.balance() <= 0
         for b in ("bonus", "monthly", "bought"):        # Perplexity's order: bonus, then monthly, then purchased
             take = min(cost, getattr(st, b))
             if take:
                 setattr(st, b, getattr(st, b) - take)
                 spent[p][b] += take
                 cost -= take
-        if cost:                            # the balance was already zero: work done past the end of the credits
-            past[p] += cost
-            spent[p]["past"] += cost
+        if cost:
+            spent[p]["over"] += cost        # the action that spends the last credits finishes; its remainder is written off
+            if empty:                       # the balance was already zero: an action started after the credits ran out,
+                past[p] += cost             # because this action or the pause was still in flight
         maybe_refill(u, st, now / 1e9)
         if st.balance() <= 0 and not st.paused:
             decide(u, st, "pause", "no credits")
@@ -191,7 +194,7 @@ async def main(a):
             ok = "idle" if not r["n"] else "PASS" if r["p99"] < a.budget_ms else "FAIL"
             p = period(a.period_s)
             sp = spent[p]
-            used = sp["bonus"] + sp["monthly"] + sp["bought"] + sp["past"]
+            used = sp["bonus"] + sp["monthly"] + sp["bought"] + sp["over"]
             by_plan = defaultdict(int)
             for u in paused:
                 by_plan[accts[u].plan["plan"]] += 1
