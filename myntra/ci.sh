@@ -60,7 +60,7 @@ if peak:
 stale = nums(r"without the last action ([0-9.]+)%", f)
 print("type-ahead requests: %d s checked, %.0f requests, %.0f where the last action changed the lead category, boosted without the last "
       "action: median %.3f%%, worst second %.3f%%, wrong category boosted %.0f" % (
-    len(f), sum(nums(r"requests ([0-9,]+)  after", f)), sum(nums(r"category changed ([0-9,]+)  boosted", f)),
+    len(f), sum(nums(r"requests ([0-9,]+)  lead", f)), sum(nums(r"category changed ([0-9,]+)  boosted", f)),
     st.median(stale) if stale else float("nan"), max(stale) if stale else float("nan"),
     sum(nums(r"wrong category boosted ([0-9,]+)", f))))
 e = [l for l in open("clickstream.log") if re.search(r"\] +[1-9][0-9,]* msgs/s", l)]
@@ -69,7 +69,7 @@ if e:
 hr = [l for l in open("hold.log") if re.search(r"\[type-ahead\] requests [1-9]", l)][5:]
 if hr:
     print("what-if, every action applied 1 s late: %d s, %.0f requests, boosted without the last action: median %.1f%%, "
-          "wrong category boosted %.0f" % (len(hr), sum(nums(r"requests ([0-9,]+)  after", hr)),
+          "wrong category boosted %.0f" % (len(hr), sum(nums(r"requests ([0-9,]+)  lead", hr)),
           st.median(nums(r"without the last action ([0-9.]+)%", hr)), sum(nums(r"wrong category boosted ([0-9,]+)", hr))))
 if len(f) < 30:
     raise SystemExit("too few seconds with type-ahead requests")
