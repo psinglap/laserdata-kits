@@ -78,7 +78,16 @@ one-second batch window would, so you can see how many requests such a path boos
 
 **What the numbers mean.** The kit times each action from the moment `app.py` sends it to the moment
 `context.py` has folded it into the context, through Python clients, on whatever machine you run it on.
-CI results are added here after the green runs.
+On a shared GitHub runner (2 vCPU), with the broker and four Python processes on one box, at 1,500 shopper
+actions a second over 200,000 shoppers (2x for 15 s as the surge), two green CI runs held p50 7.0 to 8.1 ms,
+p99 12.2 to 14.9 ms and p99.9 14.2 to 16.8 ms (median per second over 62 steady-state seconds each, no second
+over the 50 ms budget). Through the surge (3,000 actions a second) the median per-second p99 was 16.5 to
+19.4 ms, worst 18.7 to 21.4 ms, with a 1 MB/s clickstream next door. Of about 57,400 to 57,800 type-ahead
+requests per run, none was boosted without the shopper's last action and no wrong category was boosted. The
+what-if with every action applied 1 s late boosted 40.9 to 41.0% of requests (median per second) from a stale
+context, about 8,800 to 8,900 per run leading with the wrong category. That is the end-to-end lane through
+this demo code at reduced scale, not the broker alone; the broker's own tail latency is measured with
+`iggy-bench` on dedicated machines (`bench/PLAN.md`).
 
 | File | What it is |
 |---|---|
