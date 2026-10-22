@@ -1,8 +1,9 @@
 """The load check, fed by the dock scan lane.
 
-Reads every partition of dock-scans directly, on --readers connections of its own, tracking its own position and
-storing it on the broker at most once a second (no consumer group: a group reader visits one partition per poll,
-so an event can wait for its partition's turn). Each record is one event on one outbound trip, keyed by trip:
+Reads every partition of dock-scans directly, on --readers connections of its own, from the start of the retained
+lane and then from its own position (no consumer group: a group reader visits one partition per poll, so an event
+can wait for its partition's turn). Starting from the retained lane is how a restarted check rebuilds every open
+trip's plan in seconds; trailers are sealed within hours, so set the topic's expiry to a shift or a day. Each record is one event on one outbound trip, keyed by trip:
   * plan: the trip's current destinations (the whole list, never a change to it), from linehaul planning;
   * load: a bag scanned onto the trailer at the dock, with its destination and the loader's handheld;
   * seal: the trailer is closed and leaves.
@@ -87,23 +88,21 @@ async def main(a):
                                        scan_seq=d["seq"], src_ns=d["ns"])))
 
     async def read(pids):
-        # Each partition in turn. Resume from the broker's stored offset once (from the start of the log the
-        # first time), then read on from our own position, storing the offset at most once a second: an offset
-        # write on every poll stalls the lane. A full batch means more is waiting, so no pause.
+        # Each partition in turn, from the start of the retained lane, then on from our own position (nothing is
+        # stored on the broker per poll; an offset write on every poll stalls the lane). Starting from the start
+        # is what lets a restarted check rebuild every open trip's plan; alerts for old scans are not re-sent.
+        # A full batch means more is waiting, so no pause.
         c = await own_client()
         who = {p: Consumer.Single(f"{a.name}-p{p}") for p in pids}
-        nxt, committed = {}, {}
+        nxt = {}
         while True:
             more = False
             for p in pids:
-                commit = time.monotonic() - committed.get(p, 0) >= a.commit_s
                 ms = await c.poll_messages(STREAM, DOCK, consumer=who[p], partition_id=p, count=a.batch,
-                                           auto_commit=commit,
+                                           auto_commit=False,
                                            polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
-                                           else PollingStrategy.Next())
+                                           else PollingStrategy.First())
                 if ms:
-                    if commit:
-                        committed[p] = time.monotonic()
                     nxt[p] = ms[-1].offset() + 1
                     now = time.time_ns()
                     for m in ms:
@@ -158,7 +157,6 @@ if __name__ == "__main__":
     p.add_argument("--readers", type=int, default=2, help="connections reading the dock-scans partitions")
     p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
     p.add_argument("--batch", type=int, default=5000)
-    p.add_argument("--commit-s", type=float, default=1, help="store each partition's offset at most this often")
     p.add_argument("--replay-alert-s", type=float, default=30,
                    help="after a restart, still send alerts for scans younger than this")
     asyncio.run(main(p.parse_args()))

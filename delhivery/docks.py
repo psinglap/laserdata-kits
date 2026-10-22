@@ -65,6 +65,7 @@ async def main(a):
     scans = defaultdict(int)                # loader -> scans so far (an alert is "in time" if this has not moved)
     truth = {}                              # (trip, scan seq) -> [loader, scans at that scan, trip, scan time, alerted]
     serial = defaultdict(int)
+    done = set()                            # misloads already audited after their seal
     last_mis = {}                           # loader -> its latest misload, until that loader's next scan
     due, out = [], defaultdict(list)        # out: partition -> messages for this tick, in creation order
     tie = itertools.count()                 # keeps heap entries with the same due time in push order
@@ -141,6 +142,7 @@ async def main(a):
     def audit(tr):
         # a few seconds after the seal: any misload on that trailer that was never flagged is missed
         for s in tr.misloads:
+            done.add((tr.id, s))
             if not truth.pop((tr.id, s))[4]:
                 stats["missed"] += 1
 
@@ -155,6 +157,8 @@ async def main(a):
                 return                      # from an earlier run of this script
             t = truth.get((d["t"], d["scan_seq"]))
             if t is None:
+                if (d["t"], d["scan_seq"]) in done:
+                    return                  # re-sent by a restarted load check after its trailer left: a repeat
                 stats["false"] += 1         # an alert for a bag that was loaded correctly
                 return
             if t[4]:
