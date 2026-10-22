@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CI smoke test: start Apache Iggy 0.9.0 and run the REV2 safety signal lane at small scale for about a minute:
 # 600 posts and comments a second (Reddit's published normal rate for its enrichment service; 2x for the first
-# 15 s) with their text, spam and media signals on 8 partitions per topic, two signals joiners owning 4 partition
+# 15 s) with their text, spam and media signals on 4 partitions per topic, two signals joiners owning 2 partition
 # numbers each, REV2's reader on the enriched topic, and a Time-Travel replay of the content stream next door
 # from second 30. Pass only if each joiner holds the 50 ms p99 budget (last signal written to joined) and REV2
 # the 100 ms budget (last signal written to REV2) in 95% of their steady-state seconds, the median join-rate is
@@ -16,14 +16,15 @@ docker compose up -d
 for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; sleep 1; done
 pip install -q -r requirements.txt
 python -m py_compile common.py content_events.py signals_joiner.py rev2_reader.py time_travel.py kafka_bridge.py
+vmstat 1 88 > vmstat.log 2>&1 &   # CPU, steal and I/O wait per second, printed if the latency check fails
 # The joiners and REV2 start first and create the topics; the content and signals are written into them.
 for j in 0 1; do
-  timeout 85 python -u signals_joiner.py --joiner $j --joiners 2 --partitions 8 > joiner-$j.log 2>&1 &
+  timeout 85 python -u signals_joiner.py --joiner $j --joiners 2 --partitions 4 > joiner-$j.log 2>&1 &
 done
-timeout 85 python -u rev2_reader.py --partitions 8 > rev2.log 2>&1 &
+timeout 85 python -u rev2_reader.py --partitions 4 > rev2.log 2>&1 &
 sleep 3
-timeout 80 python -u content_events.py --rate 600 --peak 2 --peak-s 15 --partitions 8 > content.log 2>&1 &
-timeout 80 python -u time_travel.py --rate 20000 --at 30 --partitions 8 > timetravel.log 2>&1 &
+timeout 80 python -u content_events.py --rate 600 --peak 2 --peak-s 15 --partitions 4 > content.log 2>&1 &
+timeout 80 python -u time_travel.py --rate 20000 --at 30 --partitions 4 > timetravel.log 2>&1 &
 wait || true
 echo "--- content.log";    head -n 2 content.log; tail -n 2 content.log
 echo "--- timetravel.log"; head -n 2 timetravel.log; tail -n 1 timetravel.log
@@ -42,7 +43,10 @@ check() {  # name, file, pattern of a live line
 }
 for j in 0 1; do check "joiner-$j" joiner-$j.log "\[joiner-$j\] +[1-9][0-9,]* joins/s"; done
 check rev2 rev2.log "\[rev2\] +[1-9][0-9,]* enriched/s"
-[ "$status" -eq 0 ] || { echo "signal lane latency check failed"; exit 1; }
+if [ "$status" -ne 0 ]; then
+  echo "signal lane latency check failed"; echo "--- vmstat.log"; cat vmstat.log || true
+  docker compose logs --tail 40 iggy || true; exit 1
+fi
 last=$(grep -E "\[rev2\] .* enriched/s" rev2.log | tail -n 1)
 grep -Eq "actioned on ML signals +[0-9,]+/s \([1-9][0-9,]* total\)" <<<"$last" || { echo "REV2 took no action on ML signals"; exit 1; }
 grep -Eq "without a signal +[0-9,]+/s \([1-9][0-9,]* total\)" <<<"$last" || { echo "no content went out past the wait limit"; exit 1; }

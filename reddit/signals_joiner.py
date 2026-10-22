@@ -2,8 +2,8 @@
 content the moment the last expected signal arrives.
 
 Joiner --joiner of --joiners owns every partition number p with p % joiners == joiner, of every input
-topic (content-preliminary and each signal-<name> topic), and reads those partitions directly: one reader
-task and one connection per topic, no consumer group, no rebalance. Content and its signals are keyed by
+topic (content-preliminary and each signal-<name> topic), and reads those partitions directly, in turn on
+one connection (--readers splits them across more), no consumer group, no rebalance. Content and its signals are keyed by
 content ID with the same partition function, so this joiner sees a piece of content and all of its
 signals. Per content ID it keeps the signals that have arrived; when the last expected one lands, it
 writes the fully enriched content to content-enriched (keyed by content ID) from a separate sender task
@@ -113,22 +113,25 @@ async def main(a):
         if len(r["got"]) == len(r["exp"]):
             emit(cid, r, now)
 
-    async def reader(topic, handle):
+    async def reader(work):
+        # work: (topic, partition, handler) pairs read in turn on one connection, the content topic first in
+        # each round, so a post is usually in place before its scores are read.
         c = await connect(a.url)
-        consumers = {p: Consumer.Single(f"rev2-joiner-{topic}-p{p}") for p in mine}
+        consumers = {(t, p): Consumer.Single(f"rev2-joiner-{t}-p{p}") for t, p, _ in work}
         nxt, committed = {}, {}
         while True:
             more = False
-            for p in mine:
-                start = PollingStrategy.Offset(nxt[p]) if p in nxt else PollingStrategy.Next()
+            for t, p, handle in work:
+                k = (t, p)
+                start = PollingStrategy.Offset(nxt[k]) if k in nxt else PollingStrategy.Next()
                 # Store this partition's offset on the broker at most once a second, not on every poll.
-                commit = time.monotonic() - committed.get(p, 0) >= a.commit_s
-                ms = await c.poll_messages(STREAM, topic, consumer=consumers[p], partition_id=p,
+                commit = time.monotonic() - committed.get(k, 0) >= a.commit_s
+                ms = await c.poll_messages(STREAM, t, consumer=consumers[k], partition_id=p,
                                            count=a.batch, auto_commit=commit, polling_strategy=start)
                 if ms:
                     if commit:
-                        committed[p] = time.monotonic()
-                    nxt[p] = ms[-1].offset() + 1
+                        committed[k] = time.monotonic()
+                    nxt[k] = ms[-1].offset() + 1
                     now = time.time_ns()
                     for m in ms:
                         handle(load(m.payload()), now)
@@ -188,9 +191,12 @@ async def main(a):
             st.clear()
 
     print(f"[{name}] owns partition numbers {mine} of {parts} (joiner {a.joiner} of {a.joiners}) on "
-          f"{PRELIM_TOPIC} and {', '.join(signal_topic(s) for s in SIGNALS)}; wait limit {a.max_wait_s:g} s",
+          f"{PRELIM_TOPIC} and {', '.join(signal_topic(s) for s in SIGNALS)} on {a.readers} connection(s); "
+          f"wait limit {a.max_wait_s:g} s",
           flush=True)
-    readers = [reader(PRELIM_TOPIC, on_content)] + [reader(signal_topic(s), on_signal) for s in SIGNALS]
+    topics = [(PRELIM_TOPIC, on_content)] + [(signal_topic(s), on_signal) for s in SIGNALS]
+    groups = [mine[r::a.readers] for r in range(a.readers)]
+    readers = [reader([(t, p, h) for p in g for t, h in topics]) for g in groups if g]
     await asyncio.gather(report(), sender(), sweeper(), *readers)
 
 
@@ -203,6 +209,7 @@ if __name__ == "__main__":
     p.add_argument("--max-wait-s", type=float, default=5, help="content goes out without a missing signal after this")
     p.add_argument("--compare-window-s", type=float, default=5, help="tumbling window size, for comparison only")
     p.add_argument("--budget-ms", type=float, default=50, help="p99 budget, last signal written to joined")
+    p.add_argument("--readers", type=int, default=1, help="connections reading this joiner's partition numbers")
     p.add_argument("--poll-ms", type=float, default=5, help="wait between rounds when nothing more is waiting")
     p.add_argument("--batch", type=int, default=1000)
     p.add_argument("--flush-ms", type=float, default=5, help="how often enriched content is sent")
