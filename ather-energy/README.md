@@ -96,7 +96,8 @@ than the fresh window pushed as news. That is the rider's side of a slow or nois
    it actually reached; one Python process may not reach 100 MB/s on a laptop.
 3. **Restart the alert service:** stop `alert_service.py` and start it again; it resumes from its stored offset
    (stored once a second) and still sends alerts for events from the last 30 seconds. Pass: it catches up within
-   seconds, and no alert reaches the app twice.
+   seconds and no alert is lost. Up to a second of alerts can be sent again after the restart (its
+   sequence table starts empty); each carries the same scooter and sequence, so the app drops the repeats.
 
 ## Shadow your own traffic
 
