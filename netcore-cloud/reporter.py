@@ -48,7 +48,7 @@ async def main(a):
     pending = defaultdict(int)                    # counted since the last flush, per campaign
     oldest = []                                   # webhook times not yet in the report
     caught_up = False
-    held_at, first_held = 0, None
+    held, first_held = False, None                # held: more is waiting on the topic than a quarter second of cap
     gc.freeze()                                   # keep startup tables out of the collector's way
 
     def apply(ms, now):
@@ -61,7 +61,7 @@ async def main(a):
             age = (now - e["ns"]) / 1e6
             pending[e["c"]] += 1
             oldest.append(e["ns"])
-            if now - held_at < 2e9:
+            if held:
                 st["held"] += 1
                 held_wait = max(held_wait, age / 1000)
             else:
@@ -69,7 +69,6 @@ async def main(a):
                 st["live"] += 1
 
     async def reader(mine):
-        nonlocal held_at, first_held
         c = await connect(a.url)
         consumers = {p: Consumer.Single(f"report-{name}-{p}") for p in mine}
         while True:
@@ -90,10 +89,6 @@ async def main(a):
                     nxt[p] = ms[-1].offset() + 1
                     if capped:
                         tokens[p] -= len(ms)
-                        if len(ms) == allow < a.batch:       # the cap, not the topic, ended this read:
-                            held_at = time.time_ns()         # the rest waits on the status topic
-                            if first_held is None:
-                                first_held = time.monotonic()
                     apply(ms, time.time_ns())
                     more = more or len(ms) == a.batch
             if not more:
@@ -121,7 +116,7 @@ async def main(a):
         return max(0, t.messages_count - sum(nxt.values())) if t else 0
 
     async def report():
-        nonlocal caught_up, held_wait, first_held
+        nonlocal caught_up, held_wait, first_held, held
         while True:
             await asyncio.sleep(1)
             r = lat.flush()
@@ -141,12 +136,14 @@ async def main(a):
                   f"p99 {r['p99']:6.1f}ms  p99.9 {r['p999']:6.1f}ms  {ok} (<{budget_ms:g}ms)  report rows {st['rows']:,}/s  "
                   f"in report within 1 s {within:6.2f}%  retries dropped {st['retries']:,}  "
                   f"campaigns {len(counts)}  total {sum(counts.values()):,}  t={stamp}", flush=True)
-            if first_held is not None:
+            if capped:
                 b = await backlog()
-                if b > a.batch or (time.time_ns() - held_at < 2e9 and st["held"]):
-                    print(f"[{name}] held at its write cap: took {st['held']:,}/s (cap {a.max_rate:,.0f}/s)  "
+                was, held = held, b > a.max_rate / 4          # the cap, not the topic, is what holds the rest back
+                if held:
+                    first_held = first_held or time.monotonic()
+                    print(f"[{name}] held at its write cap: took {st['live'] + st['held']:,}/s (cap {a.max_rate:,.0f}/s)  "
                           f"backlog {b:,} on {topic}  oldest waiting {held_wait:5.1f} s  t={stamp}", flush=True)
-                else:
+                elif was:
                     print(f"[{name}] back inside its write cap: backlog on {topic} cleared "
                           f"{time.monotonic() - first_held:.1f} s after it was first held  t={stamp}", flush=True)
                     first_held = None
