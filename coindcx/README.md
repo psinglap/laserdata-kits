@@ -7,6 +7,7 @@ feed handler and order path, so nothing else has to move.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.coindcx-kit
 - **One slide:** [`LaserData_CoinDCX_MarkPrices.pdf`](LaserData_CoinDCX_MarkPrices.pdf)
 
 ## Why this use case
