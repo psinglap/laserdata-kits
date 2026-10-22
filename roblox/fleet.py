@@ -236,7 +236,9 @@ async def main(a):
             return                         # placed twice (at-least-once) or already timed out
         lat.add((time.time_ns() - req[0]) / 1e6)
         st["placed"] += 1
+        # Judge both picks against the same state, before this placement's join is applied.
         live_v = verdict(pl["s"]) if pl["s"] else "none"
+        alt_v = verdict(pl["alt"]) if pl["alt"] else "none"
         if pl["s"] in srv:
             srv[pl["s"]][6] += 1           # the server has processed this placement (joined or bounced)
         if live_v == "ok":
@@ -246,7 +248,6 @@ async def main(a):
             st[f"live_{live_v}"] += 1
             if pl["s"] in srv:
                 emit(pl["s"], "bounce")    # the engine instance turned the player away; its state says so
-        alt_v = verdict(pl["alt"]) if pl["alt"] else "none"
         if alt_v != "ok":
             st[f"alt_{alt_v}"] += 1
 
