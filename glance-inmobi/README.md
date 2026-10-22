@@ -56,8 +56,21 @@ Each ad server prints a line a second:
 ```
 
 **What the numbers mean.** The kit times each beacon from the moment the collector receives it to the moment an
-ad server has applied it, through Python clients, on whatever machine you run it on. CI numbers will be added here
-from the green runs.
+ad server has applied it, through Python clients, on whatever machine you run it on. CI result on a shared 2-vCPU
+runner, reduced scale (one collector at 800 phone syncs a second over 50,000 users, about 1,700 beacons a second,
+3 ad servers taking about 270 refills a second each, 20-second windows), ranges over three green runs
+([39855575823](https://github.com/psinglap/laserdata-kits/actions/runs/39855575823),
+[39856089826](https://github.com/psinglap/laserdata-kits/actions/runs/39856089826),
+[39856495760](https://github.com/psinglap/laserdata-kits/actions/runs/39856495760)): beacon-to-ad-server
+**p50 3.1–6.3 ms, p99 5.5–11.1 ms, p99.9 6.0–12.9 ms** (medians of 64–65 steady-state seconds per server, worst
+second p99 14.5–42.8 ms), every steady-state second inside the 50 ms budget. With 2 MB/s of interaction events on the
+same broker, p99 moved by 0.3–0.6 ms. Each ad server skipped about 1,900 campaigns at their cap and about 1,800 for a
+dismissed advertiser over the run, and **1 to 6 ads in ~59,000 (0.002–0.010%) were stale placements**; those are a
+heavy user syncing again while the previous refill request is still on its way. A restarted ad server rebuilt its
+view from the log in 0.3–0.6 s (about 16,000 users, 56,000 beacons) before taking refills, with no sequence gaps. The
+same load with every ad server applying beacons 2 seconds late (`--hold-ms 2000`): **2.6–2.9% stale, about 1,000 to
+1,100 ads in 38,000**, some 300 times more. That is the end-to-end lane through this demo code, not the broker alone;
+the broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
 
 | File | What it is |
 |---|---|
