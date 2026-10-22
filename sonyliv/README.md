@@ -1,7 +1,7 @@
 # Real-time KBC Play Along scoring for Sony LIV, on LaserData
 
 Every locked answer reaches its player's score in milliseconds, on time and counted once, before the answer is
-revealed on TV, even at a 1.6 million-player peak. It runs beside Kinesis, so nothing else has to move.
+revealed on TV, even with 1.6 million players. It runs beside Kinesis, so nothing else has to move.
 
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
