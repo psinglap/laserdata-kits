@@ -94,8 +94,8 @@ async def main(a):
         else:                               # still replaying: track the oldest event seen this second
             stats["replayed"] += 1
             stats["max_age"] = max(stats["max_age"], age)
-        if now // 1_000_000 - e["et"] > MAX_LATE_S * 1000:
-            stats["stale"] += 1             # older than an hour: dropped, your rule
+        if e["ns"] // 1_000_000 - e["et"] > MAX_LATE_S * 1000:
+            stats["stale"] += 1             # entered the lane over an hour after its event time: dropped, your rule
             stats["stale_inr"] += e["cost"]
             return
         key = (canonical(e["id"]), e["et"] // (BUCKET_S * 1000))
