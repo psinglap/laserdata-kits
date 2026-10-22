@@ -14,7 +14,9 @@ POSITIONS = "positions"          # position changes keyed by account, resulting 
 LIQ = "liquidation-orders"       # what the liquidation workers send to the order path
 EXPORT = "trade-export"          # a heavy, latency-tolerant stream on the same broker (fills to the lakehouse)
 DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: small writes go out at once
-PARTITIONS = {MARKS: 16, POSITIONS: 16, LIQ: 8, EXPORT: 16}
+# Marks: 4 partitions. The whole batch goes out at once, one send per partition, and the sends on one connection
+# queue behind each other, so fewer, larger sends get the last mark of the batch out sooner.
+PARTITIONS = {MARKS: 4, POSITIONS: 16, LIQ: 8, EXPORT: 16}
 
 # Pairs as CoinDCX Futures names them, with mark prices read from the public futures price endpoint on
 # 22 Oct 2026 as starting points. The rest of the ~500 active instruments are generated alts.

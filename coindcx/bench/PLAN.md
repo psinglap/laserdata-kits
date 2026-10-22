@@ -11,7 +11,7 @@ Rules are fixed before any result exists. If the other system wins a step, that 
 | Record size | ~150 B | instrument or account, sequence, mark price or position state, batch, timestamp. |
 | Mark batches | 505 → 1,000 → 2,000 instruments, once a second | Every active instrument, all at once, as the partner's marks arrive. |
 | Position changes | 2K → 10K → 30K changes/s | Fills, adds, reduces and closes, plus the closes liquidations cause. |
-| Partitions | 16 for marks keyed by instrument, 16 for positions keyed by account | Each instrument's marks and each account's positions apply in order. |
+| Partitions | 4 for marks keyed by instrument, 16 for positions keyed by account | Each instrument's marks and each account's positions apply in order. |
 | Readers | 4 liquidation workers, each reading every mark partition and a quarter of the positions | Cross margin needs every mark in every worker. |
 | Durability | Iggy `replicated` × 3 · Kafka `acks=all`, RF 3, min ISR 2 | A position change must not come back undone. |
 | Kafka tuning | `linger.ms=0`, `fetch.max.wait.ms=0` | Kafka on its best latency settings. |
