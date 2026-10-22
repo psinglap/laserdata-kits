@@ -65,6 +65,7 @@ async def main(a):
     slots = defaultdict(lambda: asyncio.Semaphore(a.slots))   # cluster -> its agent's kubectl slots
     answered = set()                        # request IDs already answered (rebuilt from the reply log)
     offline = {"on": False}
+    resumed_ns = {}                         # partition -> when its agents reconnected
 
     # Rebuild "already answered" from the reply log, so a restarted agent never runs a request twice.
     rc = await own_client()
@@ -107,14 +108,15 @@ async def main(a):
                 stats["stale"] += 1         # finished after the deadline: must stay 0
             reply(d, status, q_ms, took * 1000, held)
 
-    def on_request(m, now):
+    def on_request(m, now, p):
         d = load(m.payload())
         stats["received"] += 1
         if d["id"] in answered:
             stats["skipped"] += 1           # answered before a restart: do not run it again
             return
         q_ms = (now - d["ns"]) / 1e6
-        held = q_ms > 1000                  # waited in the log (agent offline, or replayed after a restart)
+        # waited in the log: sent while this partition's agents were disconnected, or replayed after a restart
+        held = q_ms > 1000 or d["ns"] < resumed_ns.get(p, 0)
         if held:
             stats["held"] += 1
         if now >= d["dl"]:                  # deadline passed before the agent saw it: never run
@@ -143,7 +145,7 @@ async def main(a):
                     nxt[p] = ms[-1].offset() + 1
                     now = time.time_ns()
                     for m in ms:
-                        on_request(m, now)
+                        on_request(m, now, p)
                     more = more or len(ms) == a.batch
             if not more:
                 await asyncio.sleep(a.poll_ms / 1000)
@@ -168,6 +170,7 @@ async def main(a):
         offline["on"] = True
         print(f"[agents] partition {a.offline_partition}: agents disconnected for {a.offline_for:g} s", flush=True)
         await asyncio.sleep(a.offline_for)
+        resumed_ns[a.offline_partition] = time.time_ns()
         offline["on"] = False
         print(f"[agents] partition {a.offline_partition}: agents back, reading on from where they stopped", flush=True)
 
