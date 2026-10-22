@@ -15,10 +15,11 @@ pip install -q -r requirements.txt
 python -m py_compile common.py ledger.py call_workers.py transcript_flood.py call_events_bridge.py
 # The ledger starts first and creates the topics; the workers and the neighbour follow.
 # 400 conversations offered a second over 200 organizations and 4 workers, 6 s average talk time (compressed from
-# minutes, so ceilings fill and free while you watch); 2 MB/s of post-call payloads from second 20.
+# minutes, so ceilings fill and free while you watch); 2 MB/s of post-call payloads from second 20. The workers
+# stop about 9 s before the ledger, so the ledger must release every slot they held by lease.
 timeout 78 python -u ledger.py --orgs 200 --conv-per-s 400 --talk-s 6 > ledger.log 2>&1 &
 sleep 3
-timeout 72 python -u call_workers.py --workers 4 --orgs 200 --conv-per-s 400 --talk-s 6 > workers.log 2>&1 &
+timeout 66 python -u call_workers.py --workers 4 --orgs 200 --conv-per-s 400 --talk-s 6 > workers.log 2>&1 &
 timeout 70 python -u transcript_flood.py --mbps 2 --at 20 --duration 35 > transcripts.log 2>&1 &
 wait || true
 echo "--- workers.log";     head -n 2 workers.log; tail -n 4 workers.log
@@ -77,6 +78,12 @@ if not d:
     raise SystemExit("no headroom decisions reached the workers")
 print("decision-to-workers (4 readers): p50 %.1f ms  p99 %.1f ms (medians of seconds with decisions, %d s)" % (
     st.median(nums(r"workers n [0-9,]+ p50 ([0-9.]+)ms", d)), st.median(nums(r"p99 ([0-9.]+)ms", d)), len(d)))
+end = [l for l in open("ledger.log") if l.startswith("[ceiling]")][-1]
+released = sum(nums(r"released by lease ([0-9,]+)", [l for l in open("ledger.log") if l.startswith("[ceiling]")]))
+print("after the workers stopped: %s live conversations left, %d worker slot counts released by lease" % (
+    re.search(r"live conversations ([0-9,]+)", end).group(1), released))
+if not end.startswith("[ceiling] live conversations 0 ") or released == 0:
+    raise SystemExit("the ledger did not release the stopped workers' slots by lease")
 e = [l for l in open("transcripts.log") if re.search(r"\] +[1-9][0-9,]* msgs/s", l)]
 if e:
     print("post-call payload neighbour: %d s, median %.1f MB/s on its own topic" % (len(e), st.median(nums(r"~([0-9.]+) MB/s", e))))
