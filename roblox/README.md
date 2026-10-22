@@ -53,6 +53,24 @@ They print a line a second:
         an index refreshed every 3s would bounce … (full … shutting down …) no server …
 ```
 
+**What the numbers mean.** The kit times each change from the moment `fleet.py` creates it (including its wait
+for the next write) to the moment a `matchmaker.py` has applied it to its index, through Python clients, on
+whatever machine you run it on. On a shared 2-vCPU GitHub runner with the broker and all four scripts on one box
+(about 1,500 servers of 60 places in 6 edge data centers, 100 players pressing Play a second, a creator update
+with a 10× herd for 15 s, 2 MB/s of analytics events next door, two matchmakers, one restarted), the medians of
+the steady-state seconds over two green runs on the final code were p50 5.3–6.7 ms, p99 13.9–16.3 ms and p99.9
+16.3–19.5 ms on each matchmaker, at about 690 server changes a second (about 1,600 in the herd). Every
+steady-state second passed the 50 ms budget (65 of 65 and 53 of 53 per matchmaker in both runs); the worst second
+reached 28.8–48.1 ms. The restarted matchmaker rebuilt its index from the log (1,813–1,821 servers, about 19,600
+changes) in 0.10–0.18 s before it took a join. Of about 19,900 placements checked against the servers, 21
+(0.11%) bounced, 18–19 of them at the moment of the update, sent to servers closing within milliseconds of the
+pick. The same matchmakers' index copies refreshed every 3 s would have bounced 3,953–4,117 joins (19.9–20.8%)
+and found no open server for 9,651–9,746 (48.5–49.2%), because the servers started for the herd filled before the
+next refresh. Press-to-placement was p50 7.3–8.1 ms and p99 12.6–14.8 ms. That is the end-to-end lane through this
+demo code at reduced scale, not the broker alone, and the comparison is the kit's model, not a Roblox figure. One
+Python reader tops out near 4,000 changes/s on that runner; past it, the reader falls behind, not the broker. The
+broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
+
 | File | What it is |
 |---|---|
 | `fleet.py` | The game servers and the players. Publishes each server's state to `server-state` with a per-server sequence and the resulting state (players, capacity, open or closing, placements seen); sends join requests keyed by place; starts servers where a place runs short of slots; checks every placement against the server at that moment. `--herd` runs a creator update and a thundering herd. |
