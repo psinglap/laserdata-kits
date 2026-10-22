@@ -1,16 +1,53 @@
 name: kits
+# Each kit runs against a real Apache Iggy broker.
+# push: only the kits whose code changed (README and PDF edits don't count).
+# workflow_dispatch: the kits named in `accounts` (space or comma separated), or "all".
+# schedule: every kit, nightly, to catch regressions.
 on:
   push:
   workflow_dispatch:
+    inputs:
+      accounts:
+        description: 'Kit folders to test, or "all"'
+        default: all
+  schedule:
+    - cron: "17 2 * * *"
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      accounts: ${{ steps.pick.outputs.accounts }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          WANT: ${{ github.event.inputs.accounts }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          all=$(ls -d */ci.sh | cut -d/ -f1)
+          if [ "$EVENT" = schedule ] || { [ "$EVENT" = workflow_dispatch ] && [ "$WANT" = all ]; }; then
+            pick="$all"
+          elif [ "$EVENT" = workflow_dispatch ]; then
+            pick=$(echo "$WANT" | tr ', ' '\n\n' | grep -v '^$' | grep -Fxf <(echo "$all") || true)
+          else
+            if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then range="$BEFORE..$GITHUB_SHA"; else range="$GITHUB_SHA~1..$GITHUB_SHA"; fi
+            pick=$(git diff --name-only "$range" | grep -v -E '\.(md|pdf)$' | grep / | cut -d/ -f1 | sort -u | grep -Fxf <(echo "$all") || true)
+          fi
+          echo "accounts=$(echo "$pick" | grep -v '^$' | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+          echo "Testing: $(echo $pick)"
   kit:
+    needs: plan
+    if: needs.plan.outputs.accounts != '[]'
     name: ${{ matrix.account }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        account: [zepto, swiggy, meesho, eternal, rapido, porter, groww, phonepe, razorpay, zerodha, juspay, jiohotstar, sharechat, zee5, moengage, signoz, dream11, the-trade-desk, magnite, braze, pubmatic, klaviyo, attentive, cursor, character-ai, deepgram, vapi, stubhub, doordash, motive, rivian, robinhood, kraken, jump-trading, honeycomb, posthog, sentry, atlassian, netflix, disney, pinterest, discord, conviva, reddit, roblox, scopely, aweber]
+        account: ${{ fromJSON(needs.plan.outputs.accounts) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
