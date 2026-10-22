@@ -76,12 +76,14 @@ for name, lines in (("after warm-up", f), ("during the herd", herd)):
     print("%s (%d s): placements checked %d  bounced %d (full %d, shutting down %d, %.2f%%) no server %d  unplaced %d | "
           "an index refreshed every 3 s would bounce %d (full %d, shutting down %d, %.2f%%) and find no server for %d (%.2f%%)" % (
           name, len(lines), c, b, bf, bc, 100 * b / max(c, 1), bn, un, s, sf, sc, 100 * s / max(c, 1), sn, 100 * sn / max(c, 1)))
-c, b, _, _, bn, s, _, _, sn, _ = tot(f)
+c, b, _, _, bn, s, _, _, sn, un = tot(f)
 pp = [l for l in f if "press-to-placement" in l]
 print("press-to-placement, median per second: p50 %.1f ms  p99 %.1f ms" % (
     st.median(nums(r"placement p50 ([0-9.]+)ms", pp)), st.median(nums(r"placement p50 [0-9.]+ms p99 ([0-9.]+)ms", pp))))
 if c < 2000 or not herd:
     raise SystemExit("placements or the herd did not flow")
+if un * 50 > c:
+    raise SystemExit("more than 2% of joins were never placed")
 if b + bn >= s + sn:
     raise SystemExit("the live index bounced as many joins as the 3 s comparison index")
 PY
