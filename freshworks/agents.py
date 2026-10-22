@@ -270,6 +270,7 @@ async def main(a):
         st["routed"] += 1
         k = r["a"]
         live_v = verdict(k, ch) if k else "none"
+        alt_v = verdict(r["alt"], ch) if r["alt"] else "none"   # both picks judged on the same state, before either lands
         if k in ag:
             ag[k][SEEN] += 1               # the product has processed this assignment (taken or sent back)
         if live_v == "ok":
@@ -287,7 +288,6 @@ async def main(a):
             st[f"live_{live_v}"] += 1
             if k in ag:
                 emit(k, "sent_back", "freshdesk" if ch == "ticket" else "freshchat")
-        alt_v = verdict(r["alt"], ch) if r["alt"] else "none"
         if alt_v != "ok":
             st[f"alt_{alt_v}"] += 1
 
