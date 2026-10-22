@@ -7,6 +7,7 @@ the GPS vendor integrations, the consumers and the live-tracking page stay where
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.redbus-kit
 - **One slide:** [`LaserData_redBus_BoardingPoints.pdf`](LaserData_redBus_BoardingPoints.pdf)
 
 ## Why this use case
