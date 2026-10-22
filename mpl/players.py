@@ -15,7 +15,8 @@ matches. This script checks each decision against the player's true form at the 
 Each decision also carries the decision the same matchmaker would have made from a view --stale-s seconds behind
 (set on matchmaker.py), and that decision is checked against the same true form, before the game is played.
 
---surge adds players at --surge-at for --surge-for seconds, the shape of a live sporting event's peak.
+--surge adds players at --surge-at (arriving over --ramp-s) for --surge-for seconds, the shape of a live sporting
+event's peak.
 """
 import argparse
 import asyncio
@@ -46,7 +47,7 @@ async def main(a):
     pending = {}                    # request id -> (tap ns, player, seq, streak at the tap)
     ids = itertools.count(1)
     leaving = set()                 # players who leave at their next tap
-    st, lat, run = defaultdict(int), Window(), {"surge": False, "added": False, "until": 0.0}
+    st, lat, run = defaultdict(int), Window(), {"surge": False, "added": False, "to_add": 0}
 
     def emit(p, kind):
         v = pl[p]
@@ -57,8 +58,8 @@ async def main(a):
     def schedule(due, kind, p):
         heapq.heappush(events, (due, next(order), kind, p))
 
-    def add_players(n, first_tap_within):
-        base, now = len(pl), time.monotonic()
+    def add_players(n, first_tap_within, after=0.0):
+        base, now = len(pl), time.monotonic() + after
         for i in range(base, base + n):
             p = player_id(i)
             skill = rng.gauss(1200, 200)
@@ -115,8 +116,14 @@ async def main(a):
             surge = a.surge > 1 and a.surge_at <= t < a.surge_at + a.surge_for
             if surge and not run["added"]:
                 run["added"] = True
-                surge_players = add_players(int((a.surge - 1) * a.players), a.think_max)
-                print(f"[players] live event: {len(surge_players):,} players join for {a.surge_for:g} s", flush=True)
+                run["to_add"] = int((a.surge - 1) * a.players)
+                print(f"[players] live event: {run['to_add']:,} players join over {a.ramp_s:g} s, "
+                      f"for {a.surge_for:g} s", flush=True)
+            if surge and run["to_add"] > 0:
+                # Players arrive over --ramp-s, a slice a tick; each one's first tap comes after its form is out.
+                n = min(run["to_add"], max(1, int((a.surge - 1) * a.players / (a.ramp_s * 100))))
+                run["to_add"] -= n
+                surge_players += add_players(n, a.think_max, after=a.think_min)
             if run["added"] and not surge and surge_players:
                 leaving.update(surge_players)   # the event ends: these players leave after their current game
                 surge_players = []
@@ -216,5 +223,6 @@ if __name__ == "__main__":
     ap.add_argument("--surge", type=float, default=1, help="players online multiplier during a live event (1 = off)")
     ap.add_argument("--surge-at", type=float, default=60, help="seconds after start")
     ap.add_argument("--surge-for", type=float, default=60)
+    ap.add_argument("--ramp-s", type=float, default=5, help="seconds over which the surge's players arrive")
     ap.add_argument("--stale-s", type=float, default=10, help="the comparison view's delay, as set on matchmaker.py (label only)")
     asyncio.run(main(ap.parse_args()))
