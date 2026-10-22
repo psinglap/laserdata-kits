@@ -28,7 +28,7 @@ timeout 70 python -u telemetry_flood.py --mbps 2 --at 15 --duration 45 --burst-a
   > telemetry.log 2>&1 &
 wait || true
 echo "--- scooters.log";  head -n 2 scooters.log; grep "reconnect storm done" scooters.log || true; tail -n 3 scooters.log
-echo "--- service.log";   tail -n 4 service.log
+echo "--- service.log";   sed -n "20,21p" service.log | cut -c1-420; tail -n 2 service.log | cut -c1-200; echo "service log lines: $(wc -l < service.log)"
 echo "--- history.log";   grep -m 3 -E "filed [1-9]" history.log || true; tail -n 2 history.log
 echo "--- telemetry.log"; head -n 2 telemetry.log; grep -m 2 "burst" telemetry.log || true; tail -n 1 telemetry.log
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" service.log | cut -c1-400 || true

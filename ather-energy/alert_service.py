@@ -120,8 +120,11 @@ async def main(a):
                     stats["sent"] += len(batch)
 
     async def report():
+        last = time.monotonic()
         while True:
             await asyncio.sleep(1)
+            now = time.monotonic()
+            took, last = now - last, now          # the real length of this "second", for an honest rate
             if not caught_up[0]:
                 # caught up once a whole second of events arrived inside the budget; partitions interleave,
                 # so one fresh event alone doesn't mean the replay is finished
@@ -134,12 +137,12 @@ async def main(a):
                 continue
             r = lat.flush()
             ok = "idle" if not r["n"] else "PASS" if r["p99"] < a.budget_ms else "FAIL"
-            print(f"[{a.name}] {r['n']:>7,} events/s  event-to-service p50 {r['p50']:6.1f}ms  p99 {r['p99']:6.1f}ms  "
+            print(f"[{a.name}] {round(r['n'] / took):>7,} events/s  event-to-service p50 {r['p50']:6.1f}ms  p99 {r['p99']:6.1f}ms  "
                   f"p99.9 {r['p999']:6.1f}ms  {ok} (<{a.budget_ms}ms)  alerts sent {int(stats['sent']):,} "
                   f"(charging started {int(stats[CHARGE_START]):,}, complete {int(stats[CHARGE_DONE]):,}, "
                   f"parked movement {int(stats[MOVED]):,}, crash {int(stats[CRASH]):,}, delayed {int(stats['delayed']):,})  "
                   f"late events filed, not pushed {int(stats['filed']):,}  repeats dropped {int(stats['repeats']):,}  "
-                  f"{stalls.read()}  slowest event->broker {stats['to_broker']:.0f} ms, broker->service "
+                  f"{stalls.read()}  report every {took:.2f} s  slowest event->broker {stats['to_broker']:.0f} ms, broker->service "
                   f"{stats['from_broker']:.0f} ms", flush=True)
             stats.clear()
 
