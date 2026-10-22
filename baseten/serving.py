@@ -278,6 +278,7 @@ async def main(a):
         view[late], inflight[late], live[late] = Index(), [0] * a.replicas, False
         catch[late] = dict(n=0, sec_n=0, sec_age=0, last_old=0.0, t=time.monotonic(), told=False)
         print(f"[routers] {late} starts at {a.join_at:g} s and rebuilds its index from the log", flush=True)
+        gc.disable()                        # the rebuild allocates the whole index: no collector pauses meanwhile
         await reader(late, time.time_ns())()
 
     async def report():
@@ -299,6 +300,8 @@ async def main(a):
                 if c_["sec_n"] and c_["sec_age"] < budget_ns:
                     took = max(0.0, (c_["last_old"] or c_["t"]) - c_["t"])
                     live[s] = True
+                    gc.freeze()             # the rebuilt index joins the start-up objects, out of the collector's way
+                    gc.enable()
                     print(f"[routers] {s} rebuilt from the log in {took:.2f}s: {c_['n']:,} events replayed, "
                           f"{len(view[s].where):,} blocks known; now routing", flush=True)
                 else:
