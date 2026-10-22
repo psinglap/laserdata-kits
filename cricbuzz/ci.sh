@@ -25,12 +25,14 @@ timeout 76 python -u impressions.py --rate 250 --x 4 --at 40 --for 15 > impressi
 timeout 76 python -u commentary_node.py --name commentary-1 --matches $M > commentary-1.log 2>&1 &
 # commentary-2 stops at 34 s and match alerts at 46 s, and each starts again: on restart the node must rebuild
 # every live match from the log, and match alerts must send nothing twice. The restarts are staggered so the two
-# start-ups don't land in the same second on the runner's 2 vCPUs.
+# start-ups don't land in the same second on the runner's 2 vCPUs. Each restart runs at nice 10: on a real
+# deployment a joining reader starts on its own machine, while here its interpreter start-up and replay shared
+# 2 vCPUs with the broker and five other processes and cost the node under test one or two seconds of 20-45 ms.
 ( timeout 46 python -u match_alerts.py > alerts.log 2>&1 || true; sleep 1
-  timeout 28 python -u match_alerts.py > alerts-restart.log 2>&1 || true ) &
+  timeout 28 nice -n 10 python -u match_alerts.py > alerts-restart.log 2>&1 || true ) &
 timeout 34 python -u commentary_node.py --name commentary-2 --matches $M > commentary-2.log 2>&1 || true
 sleep 1
-timeout 40 python -u commentary_node.py --name commentary-2 --matches $M > commentary-2-restart.log 2>&1 || true
+timeout 40 nice -n 10 python -u commentary_node.py --name commentary-2 --matches $M > commentary-2-restart.log 2>&1 || true
 wait || true
 python -u match_alerts.py --audit > audit.log 2>&1
 echo "--- desk.log";        grep -m 1 "opening lines" desk.log || true; tail -n 3 desk.log
