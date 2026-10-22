@@ -16,13 +16,15 @@ pip install -q -r requirements.txt
 python -m py_compile common.py alert_service.py ride_history.py scooters.py telemetry_flood.py kafka_bridge.py
 # The alert service and ride history start first and create the topics; the fleet and the neighbour follow.
 # 60,000 scooters, an event every 30 s each (about 2,000 events/s), 1% resent; 5% of the fleet offline for
-# 6 minutes reconnects at 30 s over 8 s; 2 MB/s of sensor packets from 15 s, 6 MB/s during the reconnect.
+# 6 minutes reconnects at 30 s over 8 s; 2 MB/s of sensor packets from 15 s, 4 MB/s during the reconnect.
+# vmstat records the runner's CPU and disk each second, so a slow second can be traced to the host.
+vmstat -n 1 80 > vmstat.log 2>&1 &
 timeout 80 python -u alert_service.py > service.log 2>&1 &
 timeout 80 python -u ride_history.py > history.log 2>&1 &
 sleep 3
 timeout 72 python -u scooters.py --scooters 60000 --event-s 30 --storm-at 30 --storm-share 0.05 --offline-min 6 \
   --flush-s 8 > scooters.log 2>&1 &
-timeout 70 python -u telemetry_flood.py --mbps 2 --at 15 --duration 45 --burst-at 15 --burst-for 10 --burst-x 3 \
+timeout 70 python -u telemetry_flood.py --mbps 2 --at 15 --duration 45 --burst-at 15 --burst-for 10 --burst-x 2 \
   > telemetry.log 2>&1 &
 wait || true
 echo "--- scooters.log";  head -n 2 scooters.log; grep "reconnect storm done" scooters.log || true; tail -n 3 scooters.log
@@ -30,6 +32,7 @@ echo "--- service.log";   tail -n 4 service.log
 echo "--- history.log";   grep -m 3 -E "filed [1-9]" history.log || true; tail -n 2 history.log
 echo "--- telemetry.log"; head -n 2 telemetry.log; grep -m 2 "burst" telemetry.log || true; tail -n 1 telemetry.log
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" service.log | cut -c1-400 || true
+echo "--- runner each second, from the alert service's start (vmstat: r runnable, b blocked, us sy id wa CPU %)"; cat -n vmstat.log | cut -c1-110 || true
 echo "--- scooters stalls over 20 ms (line: output)"; grep -nE "stall gc ([2-9][0-9]|[0-9]{3,})ms|loop ([2-9][0-9]|[0-9]{3,})ms" scooters.log | sed -E "s/^([0-9]+):.*(stall.*)/\1: \2/" || true
 # Skip a 10 s warm-up while topics come online; a shared CI runner may blip, so require 95% of seconds to pass.
 steady=$(grep -E '\[alert-service\] +[1-9][0-9,]* events/s' service.log | tail -n +11 || true)

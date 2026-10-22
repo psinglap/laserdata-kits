@@ -13,7 +13,7 @@ BACKLOG = "reconnect-backlog"       # events a scooter buffered while offline, f
 ALERTS = "rider-alerts"             # the alert service's output, read by every notifier (app push, SMS, support)
 TELEMETRY = "vehicle-telemetry"     # full sensor packets: big, steady, read by analytics (the neighbour)
 DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: small writes go out at once
-PARTITIONS = {LANE: 16, BACKLOG: 16, ALERTS: 1, TELEMETRY: 16}
+PARTITIONS = {LANE: 16, BACKLOG: 8, ALERTS: 1, TELEMETRY: 8}
 
 # Event kinds (illustrative names; yours come from the vehicle's event catalogue). Every event carries the
 # scooter's whole current state (charging, state of charge, parked or riding, position), never a delta.
