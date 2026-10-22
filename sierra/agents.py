@@ -11,9 +11,10 @@ The process also plays the memory store every runtime reads (one direct reader o
 connection): it keeps each customer's memory at the newest turn sequence it has seen.
 
 The business number: of the channel switches by customers who already told the agent something, how many found
-the store missing the latest fact, so the agent on the new channel would ask again. Next to it, how many quick
-switches carried a fact from the conversation still open on the other channel: a memory written only when a
-conversation ends would miss those. Prints both every second, with memory-to-store p50/p99: the second hop.
+the store missing the latest fact, so the agent on the new channel would ask again. Next to it, of the quick
+switches (1-5 s, while the conversation they leave is still open), how many carried a fact from that open
+conversation: a memory written only when a conversation ends would miss those. Prints both every second, with
+memory-to-store p50/p99: the second hop.
 """
 import argparse
 import asyncio
@@ -107,8 +108,10 @@ async def main(a):
                             stats["with_memory"] += 1
                             if store.get(k, 0) < f:
                                 stats["ask_again"] += 1     # the store is missing the customer's latest fact
-                            if quick[i] and f > stint[i]:
-                                stats["open_conv"] += 1     # that fact came from the conversation still open
+                            if quick[i]:
+                                stats["quick"] += 1
+                                if f > stint[i]:
+                                    stats["open_conv"] += 1     # that fact came from the conversation still open
                         stint[i] = seq[i]
                     seq[i] += 1
                     fact = None
@@ -146,10 +149,10 @@ async def main(a):
             phase = "peak" if stats["peak"] else "steady"
             print(f"[agents] {int(stats['turns']):>7,} turns/s ({phase})  facts {int(stats['facts']):,}  "
                   f"channel switches {int(stats['switches']):,}, with memory {int(stats['with_memory']):,}, "
-                  f"would ask again {int(stats['ask_again']):,} (fact from the conversation still open "
-                  f"{int(stats['open_conv']):,})  memory-to-store n {r['n']:,} p50 {r['p50']:.1f}ms "
+                  f"would ask again {int(stats['ask_again']):,}; quick switches {int(stats['quick']):,}, fact from the "
+                  f"conversation still open {int(stats['open_conv']):,}  memory-to-store n {r['n']:,} p50 {r['p50']:.1f}ms "
                   f"p99 {r['p99']:.1f}ms", flush=True)
-            for k in ("turns", "facts", "switches", "with_memory", "ask_again", "open_conv"):
+            for k in ("turns", "facts", "switches", "with_memory", "ask_again", "quick", "open_conv"):
                 stats[k] = 0
 
     await asyncio.gather(turn_loop(), report(), store_reader())

@@ -55,10 +55,12 @@ if sent < 1000:
 ag = [l for l in open("agents.log") if re.search(r"\[agents\] +[1-9][0-9,]* turns/s", l)][10:]
 switches = sum(nums(r"with memory ([0-9,]+)", ag))
 again = sum(nums(r"would ask again ([0-9,]+)", ag))
-openc = sum(nums(r"still open ([0-9,]+)\)", ag))
-print("channel switches by customers with memory: %d  store missing the latest fact: %d (%.2f%%)  "
-      "latest fact from the conversation still open: %d (%.2f%%)" % (
-    switches, again, 100 * again / max(switches, 1), openc, 100 * openc / max(switches, 1)))
+quick = sum(nums(r"quick switches ([0-9,]+)", ag))
+openc = sum(nums(r"still open ([0-9,]+) ", ag))
+print("channel switches by customers with memory: %d  store missing the latest fact: %d (%.2f%%)" % (
+    switches, again, 100 * again / max(switches, 1)))
+print("quick switches (1-5 s, conversation still open): %d  latest fact from that open conversation: %d (%.1f%%)" % (
+    quick, openc, 100 * openc / max(quick, 1)))
 if switches < 300:
     raise SystemExit("too few channel switches to judge the lane")
 d = [l for l in ag if re.search(r"memory-to-store n [1-9]", l)]

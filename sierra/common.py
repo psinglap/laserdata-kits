@@ -55,7 +55,8 @@ def switch_gap(quick_share: float) -> float:
 
 
 def mean_gap() -> float:
-    return sum(s * (GAP_S[c][0] + GAP_S[c][1]) / 2 for c, s in zip(CHANNELS, CHANNEL_SHARE))
+    """Seconds between turns, averaged over turns: customers on voice take turns faster than on SMS."""
+    return 1 / sum(s * 2 / (GAP_S[c][0] + GAP_S[c][1]) for c, s in zip(CHANNELS, CHANNEL_SHARE))
 
 
 def msg(**d) -> bytes:
