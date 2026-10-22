@@ -55,14 +55,18 @@ They print a line a second:
 for its 2 ms write) to the moment a `gateway.py` has read it, through Python clients, on whatever machine you run
 it on. On a shared 2-vCPU GitHub runner with the broker and all four scripts on one box (20,000 accounts, 1,200
 reports/s with a 2× burst to 2,400/s, two gateways with 20 sessions dropped a second on each, 2 MB/s of ledger
-export next door), the medians of the steady-state seconds over two green runs were p50 2.3–2.5 ms, p99 4.1–4.3 ms
-and p99.9 4.7–4.8 ms on each gateway, and all 110 steady-state gateway-seconds per run were inside the 10 ms budget
-(worst second p99 5.4–7.7 ms). All 2,535 reconnects per run were recovered: 347–349 missed reports replayed from
-the log (95–96 fills; 81 orders that had closed while the session was away), resend p99 3 ms, with zero gaps,
-duplicates or unrecoverable resends. A gateway started 20 s into the run rebuilt its index of 16,412 accounts
-(about 26,300 reports) from the log in 2.0 s. An earlier run at 1,500 reports/s with a burst to 3,000/s had 5 of
-110 seconds over budget (p99 10.6–14.8 ms), all inside the burst: at that rate the Python readers, sharing two
-CPUs with everything else, are the limit. That is the end-to-end lane through this demo code, not the broker
+export next door), the medians of the steady-state seconds over six consecutive green runs were p50 2.4–3.1 ms,
+p99 4.1–5.1 ms and p99.9 4.4–5.5 ms on each gateway, and all 110 steady-state gateway-seconds of every run, the
+15 burst seconds included, were inside the 10 ms budget (worst single second p99 4.7–6.5 ms; 6.5 ms over all six
+runs). All 2,535 reconnects per run were recovered: 348–353 missed reports replayed from the log (96–100 fills;
+78–83 orders that had closed while the session was away), resend p99 1–2 ms, with zero gaps, duplicates or
+unrecoverable resends. A gateway started 20 s into the run rebuilt its index of about 16,400 accounts (about
+26,300 reports) from the log in 2.0 s. Before a fix to the resend path, the same test missed its 95% rule in about
+half of all runs: each resend read and decoded every report in the partition since the session dropped (up to
+thousands in the burst) on the gateway's event loop, so the live reads waited behind it and burst seconds reached
+p99 10–21 ms. Resends now fetch only the offsets the index holds for the missed reports. The runs above are on
+GitHub runners of two speeds (the slower one adds about 0.6 ms at p50).
+That is the end-to-end lane through this demo code, not the broker
 alone; a Rust gateway would read it with less overhead. The broker's own tail latency is measured with
 `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
 
