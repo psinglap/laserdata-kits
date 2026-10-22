@@ -6,6 +6,7 @@ revealed on TV, even with 1.6 million players. It runs beside Kinesis, so nothin
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.sonyliv-kit
 - **One slide:** [`LaserData_SonyLIV_KBCPlayAlong.pdf`](LaserData_SonyLIV_KBCPlayAlong.pdf)
 
 ## Why this use case
