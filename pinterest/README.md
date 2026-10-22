@@ -55,8 +55,21 @@ on another server that has not reached this one yet. Overdelivery is a direct me
 
 **What the numbers mean.** The kit times each insertion's spend from the moment one `ad_server.py` publishes it
 to the moment another has applied it to its budget view, through Python clients, on whatever machine you run
-it on. CI results are being collected on a shared 2-vCPU runner at reduced scale (3 ad servers at 400
-auctions/s each over 2,000 ad groups, 20-second budget days); the ranges over two green runs go here.
+it on. CI result on a shared 2-vCPU runner, reduced scale (3 ad servers at 400 auctions/s each over 2,000 ad
+groups, 20-second budget days; ranges over two green runs,
+[run 39703166763](https://github.com/psinglap/laserdata-kits/actions/runs/39703166763) and
+[run 39703209729](https://github.com/psinglap/laserdata-kits/actions/runs/39703209729)): spend-to-budget-view
+**p50 2.8–3.2 ms, p99 5.2–6.0 ms, p99.9 5.8–6.5 ms** (medians of 66 steady-state seconds per server; worst
+second p99 23.5–101.4 ms), inside the 50 ms budget in 263 of 264 steady-state seconds. Each budget day about
+$226 of spend (about 24,000 insertions) went through and 185–202 ad groups reached their budget; across six full
+days, **2 insertions went past budget, $0.01 of overdelivery, at most 0.005% of spend in any day**. Each server
+dropped 292–324 repeated insertions by event ID, with no sequence gaps. With 2 MB/s of insertion logs on the
+same broker, p99 moved from 5.6 to 5.7 ms in both runs. A restarted ad server rebuilt its budget view from the
+log in 0.23–0.24 s (2,000 ad groups, 27,000–33,000 insertions) before serving. The same run with every server
+applying the others' spend 2 seconds late (`--hold-ms 2000`): **1.6–1.7% of spend past budget, 396–401 free
+insertions in a full day**, more than the 1% your post called the optimized case. That is the end-to-end lane
+through this demo code, not the broker alone; the broker's own tail latency is measured with `iggy-bench` in
+`bench/PLAN.md`, on dedicated machines.
 
 ## Three tests that match your peaks
 
