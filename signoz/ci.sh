@@ -18,6 +18,8 @@ for _ in $(seq 1 60); do curl -sf http://127.0.0.1:8123/ping >/dev/null && break
 pip install -q -r requirements.txt
 python -m py_compile common.py collectors.py writer.py verify.py reconnect_flood.py kafka_bridge.py
 
+# Record the runner's disk every second (blocked processes, IO wait, writes), to tell a slow runner disk from the lane.
+vmstat -n -t 1 130 > vmstat.log 2>&1 &
 timeout -s KILL 30 python -u writer.py --budget-ms 1000 > writer1.log 2>&1 &   # killed at 30 s, like a crash
 w1=$!
 sleep 3
@@ -40,6 +42,11 @@ echo "--- collectors.log"; head -n 3 collectors.log; tail -n 4 collectors.log
 echo "--- writer1.log";    tail -n 4 writer1.log
 echo "--- writer2.log";    head -n 4 writer2.log; grep -E "has not confirmed|draining" writer2.log | head -n 20 || true; tail -n 6 writer2.log
 echo "--- verify.log";     cat verify.log
+echo "--- collector seconds with accept p99 of 50 ms or more (line: output)"
+grep -nE "accept p50 +[0-9.]+ms +p99 +([5-9][0-9]|[0-9]{3,})\.[0-9]ms" collectors.log || true
+echo "--- runner disk, per second (vmstat): seconds with IO wait of 10% or more"
+awk 'NR==2{for(i=1;i<=NF;i++)h[$i]=i; next} NR>2{ if($h["b"]>0)n++; if($h["wa"]>w)w=$h["wa"]; if($h["bo"]>o)o=$h["bo"];
+  if($h["wa"]>=10 && k++<30) print} END{printf "seconds with a process blocked on IO %d, max IO wait %d%%, max writes %d KB/s\n", n, w, o}' vmstat.log || true
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" writer2.log | cut -c1-160 || true
 
 grep -Eq "^\[writer\] +[1-9][0-9,]* rows/s" writer1.log || { echo "writer 1 never wrote to ClickHouse"; exit 1; }

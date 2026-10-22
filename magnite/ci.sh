@@ -17,6 +17,8 @@ python -m py_compile common.py exchange.py shaper.py auction_log.py kafka_bridge
 # 20 DSPs x 600 supply segments = 12,000 pairs; 2,000 appetite changes a second, 50 of them flips;
 # 1 MB/s of auction log next door, 4x from its second 40 to 55.
 D=20; S=600
+# Record the runner's disk every second (blocked processes, IO wait, writes), to tell a slow runner disk from the lane.
+vmstat -n -t 1 88 > vmstat.log 2>&1 &
 timeout 88 python -u exchange.py --dsps $D --segments $S --rate 2000 --flips 50 --snapshot-every 15 > exchange.log 2>&1 &
 sleep 4
 timeout 76 python -u auction_log.py --mbps 1 --x 4 --at 40 --for 15 --duration 70 > auction-log.log 2>&1 &
@@ -32,6 +34,11 @@ echo "--- auction-log.log"; head -n 1 auction-log.log; grep -m 1 -E 'records/s .
 for f in shaper-1 shaper-2 shaper-2-restart; do
   echo "--- $f.log"; grep -E "rebuilt|without the log" $f.log || true; tail -n 4 $f.log | cut -c1-260
 done
+echo "--- exchange seconds with write ack p99 of 50 ms or more (line: output)"
+grep -nE "write ack p50 +[0-9.]+ms +p99 +([5-9][0-9]|[0-9]{3,})\.[0-9]ms" exchange.log | head -n 20 || true
+echo "--- runner disk, per second (vmstat): seconds with IO wait of 10% or more"
+awk 'NR==2{for(i=1;i<=NF;i++)h[$i]=i; next} NR>2{ if($h["b"]>0)n++; if($h["wa"]>w)w=$h["wa"]; if($h["bo"]>o)o=$h["bo"];
+  if($h["wa"]>=10 && k++<30) print} END{printf "seconds with a process blocked on IO %d, max IO wait %d%%, max writes %d KB/s\n", n, w, o}' vmstat.log || true
 echo "--- FAIL seconds (file:line: output)"; grep -n "FAIL (" shaper-*.log | cut -c1-160 || true
 status=0
 # Skip each run's first 10 s (warm-up, or the replay right after the restart); a shared CI runner may blip,
