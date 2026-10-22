@@ -62,12 +62,13 @@ They print a line a second:
 `tracker.py` has applied it, and each crossing from the usage record that caused it to `notifier.py`,
 through Python clients, on whatever machine you run it on. On a shared 2-vCPU CI runner with the broker and
 all scripts on one box, at reduced scale (3,000 invocations/s, 1,000 apps, 4 runtime hosts, 20 s cycles,
-1% of records sent twice), it held usage-to-tracker p50 5.7 ms and p99 10.2 ms (62 of 62 steady-state
-seconds inside 50 ms), usage-to-alert p50 8.1 ms and p99 12.8 ms, and tracker-to-alert p50 2.4 ms and p99
-4.4 ms. With 2 MB/s of product analytics events on the same broker, the lane's p99 moved from 9.9 to
-10.3 ms. In each full 20 s cycle, 206–224 of 1,000 apps passed 100% of their allowance and 51–56 apps
-with a budget reached it; 2,134 retried records were absorbed, where a counter without dedupe would have
-counted 1.05% more GB-seconds and sent up to 203 alerts a cycle before the app reached the level. That is
+1% of records sent twice), two runs held usage-to-tracker p50 5.0–5.7 ms and p99 8.9–10.2 ms (62 of 62
+steady-state seconds inside 50 ms in each), usage-to-alert p50 7.5–8.1 ms and p99 12.3–12.8 ms, and
+tracker-to-alert p50 2.3–2.4 ms and p99 4.4–4.5 ms. With 2 MB/s of product analytics events on the same
+broker, the lane's p99 moved by 0.4 ms or less. In each full 20 s cycle, 206–237 of 1,000 apps passed 100%
+of their allowance and 48–57 apps with a budget reached it; 2,102–2,134 retried records were absorbed per
+run, where a counter without dedupe would have counted 0.96–1.05% more GB-seconds and sent up to 203–219
+alerts a cycle before the app reached the level. That is
 the end-to-end loop through this demo code, not the broker alone. The broker's own tail latency is
 measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
 
