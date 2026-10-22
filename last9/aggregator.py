@@ -89,6 +89,7 @@ async def main(a):
             lat.add(age)                    # live samples, from the gateway's send to applied in the aggregator
         if w in closed:
             tot["late"] += 1                # its timeslice already closed: it can no longer count
+            tot["late_add"] += add          # left out of the comparison too: dropped here, not over-counted there
             return
         g = f"{s['c']}|{s['sv']}|{s['le']}"
         if add:
@@ -190,7 +191,9 @@ async def main(a):
             if last_close:
                 lc = last_close
                 fold = lc["n_in"] / lc["n_out"] if lc["n_out"] else 0
-                over = tot["naive"] - tot["sum"]
+                # the naive aggregator saw every sample, including late ones this aggregator dropped; compare
+                # like with like, so a late drop is never reported as the naive side over-counting
+                over = tot["naive"] - tot["sum"] - tot["late_add"]
                 print(f"[timeslice] last closed {lc['w'] % 100000} +{lc['after']:,} ms after its end: "
                       f"series in {lc['n_in']:,} -> out {lc['n_out']:,} ({fold:,.0f}x fewer)  "
                       f"exact {int(tot['exact'])}/{int(tot['exact'] + tot['mismatched'])}  "
