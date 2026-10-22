@@ -17,7 +17,7 @@ docker compose up -d
 for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; sleep 1; done
 pip install -q -r requirements.txt
 python -m py_compile common.py fleet.py matchmaker.py analytics_flood.py qaas_bridge.py
-timeout 88 python -u fleet.py --places 60 --servers 1500 --regions 6 --joins 100 --direct 40 --leaves 140 \
+timeout 82 python -u fleet.py --places 60 --servers 1500 --regions 6 --joins 100 --direct 40 --leaves 140 \
   --heartbeat-s 5 --herd 10 --herd-at 40 --herd-for 15 > fleet.log 2>&1 &
 sleep 4
 timeout 70 python -u analytics_flood.py --mbps 2 --at 20 --duration 35 > analytics.log 2>&1 &
@@ -63,7 +63,8 @@ for n in ("mm-1", "mm-2", "mm-2-restart"):
 for l in open("mm-2-restart.log"):
     if "rebuilt" in l:
         print(l.strip())
-f = [l for l in open("fleet.log") if "joins requested" in l][12:]
+# skip the warm-up, and the last seconds after the matchmakers have stopped (nothing placed)
+f = [l for l in open("fleet.log") if "joins requested" in l and not re.search(r"placed 0 ", l)][12:]
 herd = [l for l in f if "(herd)" in l]
 def tot(lines):
     return [sum(nums(q, lines)) for q in (r"placed ([0-9,]+)", r"\) +bounced ([0-9,]+)", r"\) +bounced [0-9,]+ \(full ([0-9,]+)",
