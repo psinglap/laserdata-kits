@@ -58,21 +58,21 @@ They print a line a second:
 **What the numbers mean.** The kit times each sample from the moment `gateway.py` sends it to the
 moment `aggregator.py` has applied it, through Python clients, on whatever machine you run it on. On a shared
 2-vCPU CI runner with the broker and all scripts on one box, at reduced scale (9,216 series in 4 clusters scraped
-every 5 s, about 1,850–1,870 samples/s, 10 s timeslices, 1% of samples sent again as copies of the last ~10 s,
+every 5 s, about 1,860–1,870 samples/s, 10 s timeslices, 1% of samples sent again as copies of the last ~10 s,
 0.1% counter resets, a rollout doubling the pods to ~3,690 samples/s from second 30 for 15 s, and 2 MB/s of raw
-logs from second 20), three green runs on the final code held sample-to-aggregator p50 3.2–5.9 ms, p99
-6.0–11.2 ms and p99.9 6.8–13.4 ms (62 of 62 steady-state seconds inside 50 ms in each). The aggregator reads the
-16 sample partitions directly, on two connections. The raw logs moved the lane's median p99 by 0.2 ms or less;
-the rollout on top raised it 0.5–1.6 ms. In every run every closed timeslice (6–7 per run) matched the gateway's
-own count exactly, with 1,531–1,611 retries absorbed, 135–141 counter resets handled and 0 late samples; the
+logs from second 20), three green runs on the final code held sample-to-aggregator p50 5.8–6.0 ms, p99
+10.6–11.1 ms and p99.9 12.1–12.6 ms (62 of 62 steady-state seconds inside 50 ms in each). The aggregator reads the
+16 sample partitions directly, on two connections. The raw logs moved the lane's median p99 by 0.3–0.6 ms;
+the rollout on top raised it 1.7–2.2 ms. In every run every closed timeslice (6 per run) matched the gateway's
+own count exactly, with 1,577–1,603 retries absorbed, 129–168 counter resets handled and 0 late samples; the
 fold was 36x (9,216 series in, 256 out), 72x during the rollout. An aggregator without the sequence check would
-have read the late copies as counter resets and reported the same aggregates 642–714% high: that figure depends
+have read the late copies as counter resets and reported the same aggregates 677–708% high: that figure depends
 on how late the copies are and how large the counters, so read it as the direction, not a forecast. That is the
 end-to-end lane through this demo code, not the broker alone. The broker's own tail latency is measured with
 `iggy-bench` in `bench/PLAN.md`, on dedicated machines. CI runs:
-https://github.com/psinglap/laserdata-kits/actions/runs/39866319322,
-https://github.com/psinglap/laserdata-kits/actions/runs/39866561741,
-https://github.com/psinglap/laserdata-kits/actions/runs/39866576737
+https://github.com/psinglap/laserdata-kits/actions/runs/39867101382,
+https://github.com/psinglap/laserdata-kits/actions/runs/39867124474,
+https://github.com/psinglap/laserdata-kits/actions/runs/39867137845
 
 | File | What it is |
 |---|---|
