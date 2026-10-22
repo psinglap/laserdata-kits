@@ -103,8 +103,8 @@ async def main(a):
         if i in storm:
             x.online = False                # out of coverage since before the run began; buffering on the scooter
         else:
-            x.nxt = now + random.uniform(0, a.event_s)
-            due.append((x.nxt, i))
+            x.nxt = now + random.expovariate(1 / a.event_s)    # memoryless from the start: a steady rate, no
+            due.append((x.nxt, i))                              # surge when first and second events overlap
     heapq.heapify(due)
     crash_rate, moved_rate = a.crash_rate, a.moved_rate
     expected = {}                           # (scooter, seq) -> (kind, routed at ns): alerts the app must get
@@ -246,7 +246,7 @@ async def main(a):
             await asyncio.gather(send(lane_b, lane), send(back_b, backlog))
             for i in queue[:per_tick]:      # back online: live events follow the flush, in sequence order
                 x = fleet[i]
-                x.online, x.nxt = True, time.monotonic() + random.uniform(0, a.event_s)
+                x.online, x.nxt = True, time.monotonic() + random.expovariate(1 / a.event_s)
                 heapq.heappush(due, (x.nxt, i))
                 total["back"] += 1
             del queue[:per_tick]
