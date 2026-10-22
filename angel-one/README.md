@@ -65,7 +65,7 @@ order-event script on one box, at 1,000 ticks/s across 8,000 scrips with 15-seco
 green CI runs held a median per-second p50 of 1.9 to 2.3 ms, p95 3.0 to 3.5 ms, p99 3.4 to 4.0 ms and
 p99.9 3.8 to 4.5 ms, with 0 of 69 steady-state seconds over the 25 ms budget; the worst second reached
 13 to 20 ms. Every closed candle was final 3.3 to 6.5 ms after it ended (median per run 3.5 to 5.1 ms).
-A DR builder started 30 s in rebuilt the open candle from the log (4,800 to 5,200 candles, 5,900 to
+A DR builder started 30 s in rebuilt the open candle from the log (3,200 to 5,200 candles, 5,900 to
 13,900 ticks) and was timing live ticks within 2 s; it then closed the same candles as the first
 builder, digest for digest, on every candle both closed (3, 3 and 4 candles). A 10× order-event burst
 next door moved the median p99 by 0.06 to 0.2 ms. No late ticks, no sequence gaps. That is the lane through this demo code on one box,
