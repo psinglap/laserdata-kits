@@ -47,11 +47,10 @@ They print a line a second:
 `standin.py` replica has applied it to its cache, through Python clients, on whatever machine you run it on. On a
 shared 2-vCPU GitHub runner with the broker and all four scripts on one box (50,000 accounts, 1,200 changes/s, a
 2× market open to 2,400/s, two replicas, 2 MB/s of settlement records next door), the medians of the
-steady-state seconds over two green runs were p50 5.0–6.4 ms, p99 9.1–11.9 ms and p99.9 11.0–14.2 ms on each
-replica. 59 of 61 seconds per replica were inside the 50 ms budget; the other seconds (p99 62–407 ms) came when
-the ledger and both replicas stalled at the same moment, which points at the shared runner rather than the lane.
-Of about 29,400 stand-in decisions per run checked against the primary, 7–8 were made on stale state and 1–5
-disagreed with it; a cache fed 0.5 s behind would have disagreed on 3,308–3,316 (11.2–11.3%), approving about
+steady-state seconds over two green runs were p50 4.7–8.3 ms, p99 8.6–16.4 ms and p99.9 10.0–18.2 ms on each
+replica. All 61 steady-state seconds per replica were inside the 50 ms budget; the worst second's p99 was
+24.1–38.7 ms. Of about 29,400 stand-in decisions per run checked against the primary, 8–12 were made on stale
+state and 5 disagreed with it; a cache fed 0.5 s behind would have disagreed on 3,312–3,338 (11.3%), approving about
 1,530 purchases the primary declined. That is the end-to-end lane through this demo code, not the broker alone.
 One Python reader tops out near 4,000 changes/s on that runner; past it, latency climbs because the reader falls
 behind, not the broker. The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on
