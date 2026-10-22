@@ -52,7 +52,8 @@ done
 [ "$status" -eq 0 ] || { echo "trip lane check failed"; exit 1; }
 grep -Eq "\[send\] +[1-9][0-9,]* reminders/s queued" send.log || { echo "no reminders were queued"; exit 1; }
 last=$(grep -E "\[send\] .* reminders/s queued" send.log | tail -n 1)
-grep -q "trips reminded twice 0  users advanced by 2+ workers 0" <<<"$last" || { echo "duplicate reminders or shared users"; exit 1; }
+grep -q "trips reminded twice 0  users advanced by 2+ workers 0  exit events seen [1-9]" <<<"$last" || {
+  echo "duplicate reminders, shared users, or no exit events seen by the audit"; exit 1; }
 python - "$last" <<'PY' || { echo "too many reminders reached users who had already exited"; exit 1; }
 import re, sys
 m = re.search(r"exited ([0-9,]+) \(([0-9.]+)% of ([0-9,]+) judged", sys.argv[1])

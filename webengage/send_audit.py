@@ -7,7 +7,8 @@ that is still on its way is counted. Prints a line a second:
   * reminders queued per second, by journey, and how late each went out after its due time;
   * reminders sent after the trip had exited: the user renewed the policy, paid or added to cart
     before the reminder was due, and still got "your renewal is due". 0 is the pass line;
-  * trips reminded twice, and users whose trips were advanced by two or more workers. 0 and 0.
+  * trips reminded twice, and users whose trips were advanced by two or more workers. 0 and 0;
+  * exit events seen so far (so a 0 above is measured against real exits, not an empty table).
 """
 import argparse
 import asyncio
@@ -60,6 +61,7 @@ async def main(a):
         if any(x in b for x in EXIT_BYTES):               # only exits matter here; skip parsing the rest
             e = load(b)
             exited[e["u"], e["c"]] = e["ns"]
+            total["exits"] += 1
 
     def on_send(b):
         r = load(b)
@@ -93,7 +95,7 @@ async def main(a):
             print(f"[send] {st['sent']:>5,} reminders/s queued ({by})  sent after due p50 {r['p50']:6.1f}ms  "
                   f"p99 {r['p99']:6.1f}ms  reminders sent after the trip had exited {total['stale']:,} "
                   f"({share:.3f}% of {total['judged']:,} judged)  trips reminded twice {total['twice']:,}  "
-                  f"users advanced by 2+ workers {len(multi):,}", flush=True)
+                  f"users advanced by 2+ workers {len(multi):,}  exit events seen {total['exits']:,}", flush=True)
             st.clear()
 
     print(f"[send] reading '{STREAM}/{SENDS_TOPIC}' ({send_parts} partitions) and the exits on "
