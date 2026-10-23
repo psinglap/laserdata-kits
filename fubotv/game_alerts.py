@@ -10,8 +10,8 @@ It reads every partition with its own position, on its own connection, so it slo
 lane. Each alert is first recorded on the alerts-sent topic, tagged with this service's --name, and then handed to
 the push gateway (simulated here: the kit counts it). On start, or a restart, it reads its own entries in that
 record, then rebuilds every live game from the lane: an alert already recorded is never pushed again, a missed one
-still young enough (--late-s) is pushed late, an older one is skipped. Recording first means a crash in the few ms between the record and the push can miss one alert;
-it never pushes one twice.
+still young enough (--late-s) is pushed late, an older one is skipped. Recording first means a crash in the few ms
+between the record and the push can miss one alert; it never pushes one twice.
 
 Prints a line a second: clip-to-alert latency (clip ready on the lane -> alert decided here) against --budget-ms,
 then the alerts pushed, the key plays waiting for their clip, alerts held back or corrected after a review, gaps,
