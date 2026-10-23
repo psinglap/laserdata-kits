@@ -3,8 +3,8 @@
 Reads every partition of creative-seen directly, on --readers connections of its own, from the start of the
 log, tracking its own position (no consumer group: a group reader visits one partition per poll, so with 16
 partitions a record waits for its partition's turn). Each record says that one ad server node met a creative
-it holds no verdict for: node, creative, DSP, and a per-node sequence, so a replayed or repeated record is
-dropped and counted once.
+it holds no verdict for: node, creative, DSP, and a per-(node, partition) sequence, so a replayed or repeated
+record is dropped and counted once.
 
 Sightings are keyed by creative, so all sightings of one creative land on one partition and one reader. The
 first starts the creative's job (transcode, loudness, standards check, brand recognition); every later
@@ -44,7 +44,7 @@ async def main(a):
     parts = list(range((await admin.get_topic(STREAM, SEEN)).partitions_count))
     out = await (await own_client()).producer(STREAM, READY, topic_partitions_count=PARTITIONS[READY])
     lat, stats = Window(), defaultdict(float)
-    seq = {}                                # node -> last sequence applied
+    seq = {}                                # (node, partition) -> last sequence applied
     state = {}                              # creative -> "processing" | "ready" | "held"
     jobs = []                               # (due, creative) heap of running jobs
     pending = []                            # verdicts waiting for the next send
@@ -67,10 +67,11 @@ async def main(a):
         else:                               # still replaying: track the oldest record seen this second
             stats["replayed"] += 1
             stats["max_age"] = max(stats["max_age"], age)
-        if s["seq"] <= seq.get(s["x"], 0):
+        k = (s["x"], m.partition_id())
+        if s["seq"] <= seq.get(k, 0):
             stats["dropped"] += 1           # replayed or repeated: counted once
             return
-        seq[s["x"]] = s["seq"]
+        seq[k] = s["seq"]
         stats["sightings"] += 1
         c = s["c"]
         st = state.get(c)

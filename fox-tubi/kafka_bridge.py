@@ -2,7 +2,7 @@
 
 Runs as its own Kafka consumer group ("iggy-shadow"), so the ad servers, every producer and every existing
 consumer (reporting, billing, the transcoding and brand recognition you run today) are untouched. The first
-time a node's records show a creative, it becomes one sighting, keyed by creative, with a per-node sequence:
+time a node's records show a creative, it becomes one sighting, keyed by creative, with a per-(node, partition) sequence:
 the same shape ad_servers.py writes. Point creative_registry.py at Iggy and compare how many jobs it starts,
 and how many sightings it absorbs, with how many your pipeline starts today.
 
@@ -56,8 +56,9 @@ async def main(a):
                 if c in known or c in seen[x]:
                     continue
                 seen[x].add(c)
-                seq[x] += 1
-                groups[part(c, PARTITIONS[SEEN])].append(SendMessage(msg(x=x, c=c, d=d, seq=seq[x])))
+                pid = part(c, PARTITIONS[SEEN])
+                seq[(x, pid)] += 1          # ordered within a partition, so per (node, partition)
+                groups[pid].append(SendMessage(msg(x=x, c=c, d=d, seq=seq[(x, pid)])))
             # One batch per partition, all sent at once, so a creative's sightings stay in order.
             await asyncio.gather(*(producer.send_with_partitioning(ms, Partitioning.partition_id(p))
                                    for p, ms in groups.items()))

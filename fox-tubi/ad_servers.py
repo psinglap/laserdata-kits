@@ -8,7 +8,7 @@ known brand and ad category, so competitive separation (no two ads of one catego
 
 A bid whose creative the node has no verdict for is held, and the first time the node meets that creative it
 publishes one record to creative-seen, keyed by creative:
-  * node, creative, DSP, and a per-node sequence.
+  * node, creative, DSP, and a per-(node, partition) sequence.
 Each node also reads creative-ready on its own connection, straight from the partition (no consumer group),
 into its own verdict table; a node never sees another's table, so a verdict reaches every node through the log.
 
@@ -183,9 +183,10 @@ async def main(a):
                             stats["wait"] += 1
                             if c not in reported[x]:            # first time this node meets it: onto the lane
                                 reported[x].add(c)
-                                seq[x] += 1
-                                batches[part(c, PARTITIONS[SEEN])].append(
-                                    SendMessage(msg(x=x, c=c, d=DSPS[h(c, "dsp") % len(DSPS)], seq=seq[x])))
+                                pid = part(c, PARTITIONS[SEEN])
+                                seq[(x, pid)] += 1              # ordered within a partition, so per (node, partition)
+                                batches[pid].append(
+                                    SendMessage(msg(x=x, c=c, d=DSPS[h(c, "dsp") % len(DSPS)], seq=seq[(x, pid)])))
                         if snap[x].get(c) is None:
                             stats["wait_old"] += 1
                     bids.sort(reverse=True)
