@@ -7,6 +7,7 @@ it. It runs beside Kafka, so nothing else has to move.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.expedia-group-kit
 - **One slide:** [`LaserData_ExpediaGroup_BanditDecisions.pdf`](LaserData_ExpediaGroup_BanditDecisions.pdf)
 
 ## Why this use case
