@@ -38,9 +38,10 @@ wait "$CHECK" || true
 kill "$INDEX" || true
 
 echo "--- review.log"; head -n 2 review.log; tail -n 2 review.log
-echo "--- index.log"; grep -v "changes/s through" index.log | grep -v WARN | tail -n 8 || true
+echo "--- index.log"; grep -v "changes/s through" index.log | grep -v WARN | head -n 40 || true
+grep "changes/s through" index.log | awk 'NR%5==1' | head -n 30 || true
 echo "--- check.log (catching up, the last lines)"
-grep "catching up" check.log | head -n 3 || true; grep "catching up" check.log | tail -n 3 || true
+head -n 25 check.log | cut -c1-220 || true; grep "catching up" check.log | tail -n 3 || true
 grep -v "catching up" check.log | tail -n 6
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" check.log | cut -c1-200 || true
 # Skip a 10 s warm-up; a shared CI runner may blip, so require 95% of seconds to pass. Seconds while the app is down

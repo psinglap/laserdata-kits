@@ -16,6 +16,7 @@ import pathlib
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import timedelta
 
 os.environ.setdefault("COCOINDEX_DB", "./cocoindex_state")   # CocoIndex's own state: what each thread declared
 
@@ -29,6 +30,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--url", default=DEFAULT_URL)
 ap.add_argument("--topic", default=EVENTS)
 ap.add_argument("--table", default=TABLE)
+ap.add_argument("--batch", type=int, default=5000, help="Iggy messages per poll (the connector's default is 100)")
 ap.add_argument("--group", default="cocoindex-review-context", help="Iggy consumer group the connector stores offsets in")
 A = ap.parse_args()
 
@@ -88,7 +90,12 @@ async def app_main() -> None:
     table = await lancedb.mount_table_target(
         LANCE_DB, table_name=A.table,
         table_schema=await lancedb.TableSchema.from_class(ReviewThread, primary_key=["thread_id"]))
-    threads = iggy.topic_as_map(coco.use_context(IGGY), A.group, STREAM, A.topic, key=key, is_deletion=is_deletion)
+    # batch_length: the connector stores an offset only after the row is written, and under PollingStrategy.Next an
+    # Iggy consumer stalls once it reads batch_length past the stored offset (apache-iggy 0.9 consumer docs), so the
+    # batch must cover every change in flight; the connector's default of 100 caps it near 100 per write latency.
+    # poll_interval: without one the consumer re-polls in a busy loop while it waits for offsets to be stored.
+    threads = iggy.topic_as_map(coco.use_context(IGGY), A.group, STREAM, A.topic, key=key, is_deletion=is_deletion,
+                                batch_length=A.batch, poll_interval=timedelta(milliseconds=5))
     await coco.mount_each(process_thread, threads, table)
 
 
