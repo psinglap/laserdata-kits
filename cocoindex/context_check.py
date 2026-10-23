@@ -36,6 +36,7 @@ async def main(a):
     truth = {}          # thread -> (seq, deleted)
     keys = []           # every thread id seen, for lookups
     resolved_at = {}    # thread -> ns it was resolved
+    last_at = {}        # thread -> (offset, seq) of its latest change, to trace a mismatch to an offset
     pending = {}        # thread -> [(seq, ns, deleted, timed)] not yet visible in the index
     held = {"n": 0, "oldest": None}
     caught_up_topic = asyncio.Event()
@@ -60,6 +61,7 @@ async def main(a):
                 if k not in truth:
                     keys.append(k)
                 truth[k] = (d["seq"], deleted)
+                last_at[k] = (m.offset(), d["seq"])
                 if deleted:
                     resolved_at[k] = d["ns"]
                 timed = d["ns"] >= start_ns and not d.get("snap")
@@ -174,6 +176,12 @@ async def main(a):
     print(f"[verify] threads on the topic {len(truth):,} (open {open_n:,}, resolved {len(truth) - open_n:,})  rows in "
           f"Postgres {len(idx):,}  missing {missing}  stale {stale}  resolved but still indexed {zombie}  extra {extra}",
           flush=True)
+    wrong = [(k, s, d) for k, (s, d) in truth.items() if (not d and idx.get(k, -1) < s) or (d and k in idx)]
+    for k, s, d in wrong[:10]:
+            print(f"[verify] {k}: topic seq {s}{' (resolved)' if d else ''} at offset {last_at[k][0]:,}, "
+                  f"index seq {idx.get(k, 'none')}", flush=True)
+    for k in list(k for k in idx if k not in truth)[:5]:
+        print(f"[verify] {k}: in the index but never on the topic", flush=True)
     print("[verify] OK" if not bad else "[verify] MISMATCH", flush=True)
 
 
