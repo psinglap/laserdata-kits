@@ -47,13 +47,13 @@ Both print a line a second:
 **What the numbers mean.** The kit times each change from the moment `dms_inventory.py` creates it to the moment
 `agent_context.py` has applied it, through Python clients, on whatever machine runs it. On a shared 2-vCPU GitHub
 runner with the broker and all three scripts on one box (200 rooftops × 150 vehicles, about 900 changes/s, a
-repricing pass to about 2,000/s for 15 s, 2 MB/s of lakehouse CDC next door), with the context reading every
-partition directly, it held p50 6.5–6.9 ms and p99 12.0–12.8 ms over three green runs (p99 14.4–15.2 ms in the
-repricing seconds, worst second 15.5–18.8 ms), with no second over the 100 ms budget in 171. The DMS declined
-0–0.05% of test drives as no longer available, the vehicles that went to Pending Sale in the milliseconds between
+repricing pass to about 2,000/s for 15 s, 150 agent answers a second, 2 MB/s of lakehouse CDC next door), with the
+context reading every partition directly, it held p50 3.0–6.9 ms and p99 5.3–13.2 ms over three green runs (p99
+6.0–15.7 ms in the repricing seconds, worst second 16.0–20.3 ms), with no second over the 100 ms budget in 171. The
+DMS declined 0–0.02% of test drives as no longer available, the vehicles that went to Pending Sale in the milliseconds between
 answer and booking.
 
-A 30 s TTL cache would have got about half the answers wrong (51–52%) in CI. That figure comes from CI compressing
+A 30 s TTL cache would have got about half the answers wrong (51–53%) in CI. That figure comes from CI compressing
 churn: each vehicle changes about every 33 s there, far more often than on a real lot. The share scales with the
 TTL and with how often a vehicle changes, so read it as the mechanism, and run the kit on your own change rate for
 your number. That is the end-to-end lane through this demo code, not the broker alone. The broker's own tail
