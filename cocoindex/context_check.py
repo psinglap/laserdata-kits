@@ -131,6 +131,11 @@ async def main(a):
             next_report += 1
             w = lat.flush()
             overdue = sum(1 for es in pending.values() for e in es if now - e[1] > a.budget_ms * 1e6)
+            late = [(k, es) for k, es in pending.items() if now - es[0][1] > a.budget_ms * 1e6]
+            for k, es in late[:3]:
+                print(f"[check] overdue {k}: pending seq {[e[0] for e in es]} deleted {[e[2] for e in es]} "
+                      f"age {(now - es[0][1]) / 1e9:.1f} s at offset {last_at[k][0]:,}; index seq {idx.get(k, 'none')}",
+                      flush=True)
             ok = w["p99"] <= a.budget_ms and overdue == 0
             sl = "stale answers %.1f%% (snapshot from %ds ago: %.1f%%)" % (
                 100 * stale_live / max(1, looked), time.monotonic() - session_t, 100 * stale_snap / max(1, looked))
@@ -178,8 +183,8 @@ async def main(a):
           flush=True)
     wrong = [(k, s, d) for k, (s, d) in truth.items() if (not d and idx.get(k, -1) < s) or (d and k in idx)]
     for k, s, d in wrong[:10]:
-            print(f"[verify] {k}: topic seq {s}{' (resolved)' if d else ''} at offset {last_at[k][0]:,}, "
-                  f"index seq {idx.get(k, 'none')}", flush=True)
+        print(f"[verify] {k}: topic seq {s}{' (resolved)' if d else ''} at offset {last_at[k][0]:,}, "
+              f"index seq {idx.get(k, 'none')}", flush=True)
     for k in list(k for k in idx if k not in truth)[:5]:
         print(f"[verify] {k}: in the index but never on the topic", flush=True)
     print("[verify] OK" if not bad else "[verify] MISMATCH", flush=True)
