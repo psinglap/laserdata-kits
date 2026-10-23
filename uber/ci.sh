@@ -74,7 +74,13 @@ def last_window(f):
     return u, [int(x) for x in m.groups()]
 u, (exact, checked, late, rebuilt, agree, compared) = last_window("region-a.log")
 print(u[-1].strip())
-tails = nums(r"last event ([+-][0-9,]+) ms after its end", u)
+# the last event of each full window (the first and last windows of the run are partial), once per window
+seen = {}
+for l in u:
+    m = re.search(r"closed ([0-9]+) .*last event ([+-][0-9,]+) ms after its end", l)
+    if m:
+        seen[int(m.group(1))] = int(m.group(2).replace(",", ""))
+tails = [seen[w] for w in sorted(seen)[1:-1]] or [0]
 mx = nums(r"\(max ([0-9.]+)x\)", u)
 print("region-a: windows exact %d of %d; late events %d; regions agree on %d of %d windows; last event of a "
       "window arrived %+d to %+d ms after its end (grace 500 ms); max multiplier %.1fx" % (
