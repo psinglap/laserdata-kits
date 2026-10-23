@@ -1,0 +1,82 @@
+"""Shared settings for the Peacock stream-limit lane kit: every playback session start, heartbeat and stop,
+keyed by account, reaches the stream-limit view of every playback node in milliseconds, so the three-stream
+limit holds across devices and a stream that stops frees its slot at once, on Apache Iggy.
+
+A message on the lane is one session event: the account, the device, the session ID, the kind (start,
+heartbeat or stop), the writer (the node that granted or ended the session) with a per-(writer, account)
+sequence number, and the time it was published. The writer and the sequence together are the event ID: a
+repeat of an event (a client retry, an at-least-once redelivery, a replay) carries the same ID and changes
+nothing. A start is only written once the node has granted it, so the lane holds the account's real sessions.
+"""
+import asyncio
+import json
+import time
+import zlib
+from datetime import timedelta
+
+from apache_iggy import IggyClient, IggyExpiry
+
+STREAM = "peacock-playback"
+SESSIONS = "stream-sessions"        # the lane: session start, heartbeat and stop, keyed by account
+QOE = "player-qoe-beacons"          # a heavy, latency-tolerant neighbour: player quality-of-experience beacons
+PARTITIONS = {SESSIONS: 8, QOE: 16}
+RETENTION = IggyExpiry.ExpireDuration(timedelta(hours=24))   # a day of sessions, for rebuilds and audit
+DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: small writes go out at once
+DEVICES = ("tv", "phone", "tablet", "laptop")
+
+
+def account(i: int) -> str:
+    return f"acct-{i:08d}"
+
+
+def part(key: str, partitions: int) -> int:
+    # The same function in every script, so an account's session events always land on one partition, in order.
+    return zlib.crc32(key.encode()) % partitions
+
+
+def msg(**d) -> bytes:
+    d.setdefault("ns", time.time_ns())
+    return json.dumps(d, separators=(",", ":")).encode()
+
+
+def load(b: bytes) -> dict:
+    return json.loads(b)
+
+
+async def connect(url: str) -> IggyClient:
+    # One connection per writer and per reader, so a busy one never queues behind another.
+    c = IggyClient.from_connection_string(url)
+    await c.connect()
+    return c
+
+
+async def ensure_topics(c: IggyClient, *topics):
+    """Create the stream and topics if they are missing, so any script can start first."""
+    if await c.get_stream(STREAM) is None:
+        try:
+            await c.create_stream(STREAM)
+        except RuntimeError:
+            pass                          # created by another process in the meantime
+    for t in topics:
+        if await c.get_topic(STREAM, t) is None:
+            try:
+                await c.create_topic(STREAM, t, PARTITIONS[t], message_expiry=RETENTION)
+            except RuntimeError:
+                pass
+    while not all([await c.get_topic(STREAM, t) for t in topics]):
+        await asyncio.sleep(0.5)
+
+
+class Window:
+    def __init__(self):
+        self.samples = []
+
+    def add(self, v):
+        self.samples.append(v)
+
+    def flush(self):
+        s = sorted(self.samples) or [0.0]
+        pick = lambda q: s[min(len(s) - 1, int(q * len(s)))]
+        out = {"n": len(self.samples), "p50": pick(0.5), "p99": pick(0.99), "p999": pick(0.999), "max": s[-1]}
+        self.samples = []
+        return out
