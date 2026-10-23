@@ -5,8 +5,8 @@ event history for tracing and reconciliation. Reads the cloud topic directly, pa
 connection(s) to the AWS broker. For every site:carton it applies each event once by its per-carton sequence:
   * a sequence already applied (a handheld retry forwarded as sent, or a replay) changes nothing;
   * a sequence that skips one is a gap: an event lost on the way from the building (there should be none).
-An event that arrives more than --live-ms after it was scanned waited out a link outage in the building's log:
-it is counted as held and drained, never as live latency.
+An event the uplink marked held (it waited out a link outage in the building's log), or one that arrives more than
+--live-ms after it was scanned, is counted as held and drained, never as live latency.
 
 Prints every second: events applied, floor-to-AWS p50/p99 for live events, held events that arrived, and the
 ledger: cartons, ship-confirmed, cartons whose history is complete and in order, retries absorbed and gaps.
@@ -46,7 +46,7 @@ async def main(a):
         last[k] = seq
         if seq == DONE:
             tot["confirmed"] += 1
-        if age > a.live_ms:
+        if e.get("held") or age > a.live_ms:
             stats["held"] += 1              # waited in the building's log through an outage, or a replay
             stats["oldest"] = max(stats["oldest"], age / 1000)
         else:

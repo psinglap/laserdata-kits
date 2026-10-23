@@ -9,7 +9,8 @@ any of this.
 sends are refused). A failed send to the cloud broker is handled the same way. The uplink keeps the unsent batch,
 retries once a second and stops reading, so the events wait in the site log, on disk, not in memory and not on
 the handhelds. When the link is back it drains the backlog from its own position, in order per carton, at up to
---wan-eps events a second. Events that wait out an outage are counted as held, never as live latency.
+--wan-eps events a second. Events that wait out an outage are marked held and counted as held, never as live
+latency, here and in AWS.
 
 Prints, every second: events forwarded, floor-to-cloud p50/p99 while live, and, through an outage, how long the
 link has been down and how many events are held in the building, then how long the backlog took to drain.
@@ -84,9 +85,12 @@ async def main(a):
                 if not pending:
                     continue
                 batch = pending[:max(1, int(a.wan_eps * a.flush_ms / 1000))]
+                # Events that waited out an outage (or a start-up replay) are marked held, so AWS never counts
+                # them as live latency.
+                held = st["down_since"] is not None or st["mode"] != "live"
                 groups = defaultdict(list)
                 for q, b, _ in batch:
-                    groups[q].append(SendMessage(b))
+                    groups[q].append(SendMessage(b[:-1] + b',"held":1}' if held else b))
                 try:
                     if link.down():
                         raise ConnectionError("link to AWS down")
