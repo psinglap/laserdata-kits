@@ -1,6 +1,6 @@
 """The downtime detector: success rate per payment cohort, and a downtime signal the moment it falls.
 
-Reads `payment-status` (the lane in) on its own connection and consumer group, keeps the last
+Reads `payment-status` (the lane in) on its own connection, every partition read directly, keeps the last
 --window payments of every cohort, and every --every-ms runs the rule the way Razorpay's 2021
 post describes it: success rate of the last N payments against a threshold. Below --down-below
 a downtime starts; it resolves once the rate is back above --up-above. Each change goes out at
@@ -21,9 +21,9 @@ import time
 from collections import defaultdict, deque
 from datetime import timedelta
 
-from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import DirectProducerConfig, IggyClient, Partitioning, SendMessage
 
-from common import DEFAULT_URL, PARTITIONS, SIGNALS, STATUS, STREAM, Window, ensure_topics, load, msg, part
+from common import DEFAULT_URL, PARTITIONS, SIGNALS, STATUS, STREAM, Window, ensure_topics, load, msg, part, read_partitions
 
 
 async def main(a):
@@ -33,9 +33,7 @@ async def main(a):
         return c
 
     await ensure_topics(await own_client(), STATUS, SIGNALS)
-    status = await (await own_client()).consumer_group(
-        f"{a.name}-{os.getpid()}", STREAM, STATUS, polling_strategy=PollingStrategy.First(), batch_length=5000,
-        auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+    status = await own_client()             # direct partition reads, rebuilt from the first message
     signals = await (await own_client()).producer(
         STREAM, SIGNALS, topic_partitions_count=PARTITIONS[SIGNALS],
         mode=DirectProducerConfig(batch_length=500, linger_time=timedelta(microseconds=200)))
@@ -130,7 +128,8 @@ async def main(a):
                   f"signals sent {stats['signals']}", flush=True)
             stats["signals"] = 0
 
-    await asyncio.gather(status.consume_messages(on_status, asyncio.Event()), detect(), report())
+    await asyncio.gather(read_partitions(status, STATUS, range(PARTITIONS[STATUS]), f"{a.name}-{os.getpid()}", on_status,
+                                         replay=True, poll_ms=0.5), detect(), report())
 
 
 if __name__ == "__main__":

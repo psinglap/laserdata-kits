@@ -80,8 +80,8 @@ and cost per billion messages are measured with `iggy-bench` on dedicated machin
    Pass: change-to-sender p99 under 200 ms, and `out of date when sent` under 0.1%.
 2. **The campaign at full rate:** `python campaign.py --share 4` in four terminals.
    Pass: the order lane's p99 moves by less than 10%, and the campaign waits only on its own rate limit.
-3. **Restart the sender:** stop `meecom_sender.py --only orders` and start it again. Its consumer group
-   resumes from the last committed offset, and the per-order sequence drops anything already sent.
+3. **Restart the sender:** stop `meecom_sender.py --only orders` and start it again. Its partition readers
+   resume from the offsets stored once a second, and the per-order sequence drops anything already sent.
    Pass: no duplicate notifications, and it is back under budget within seconds.
 
 ## Shadow your own traffic

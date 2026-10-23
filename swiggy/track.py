@@ -20,7 +20,7 @@ from datetime import timedelta
 
 from apache_iggy import AutoCommit, IggyClient, Partitioning, PollingStrategy, SendMessage
 
-from common import DEFAULT_URL, ETA, LEGS, PINGS, STREAM, Window, km, load, msg, part
+from common import DEFAULT_URL, ETA, LEGS, PINGS, STREAM, Window, km, load, msg, part, read_partitions
 
 ETA_PARTITIONS = 8
 WAIT_GUESS_S = {"fm": 240, "wt": 120}      # restaurant wait still ahead, by leg (a stand-in for the WT model)
@@ -39,9 +39,8 @@ async def main(a):
         c = IggyClient.from_connection_string(a.url)
         await c.connect()
         return c
-    pings = await (await connected()).consumer_group(f"track-pings-{os.getpid()}", STREAM, PINGS,
-                                                    polling_strategy=PollingStrategy.First(),
-                                                    poll_interval=timedelta(microseconds=500), **poll)
+    pings = await connected()               # the latency-measured lane: direct partition reads, not a consumer group
+    ping_parts = range((await client.get_topic(STREAM, PINGS)).partitions_count)
     legs = await (await connected()).consumer_group(f"track-legs-{os.getpid()}", STREAM, LEGS,
                                                    polling_strategy=PollingStrategy.First(),
                                                    poll_interval=timedelta(milliseconds=5), **poll)   # trip legs change every few minutes
@@ -132,7 +131,8 @@ async def main(a):
             loop_lag.add((time.monotonic() - t - 0.01) * 1e3)
 
     stop = asyncio.Event()
-    await asyncio.gather(pings.consume_messages(on_ping, stop), legs.consume_messages(on_leg, stop), refresh(), report(), lag())
+    await asyncio.gather(read_partitions(pings, PINGS, ping_parts, f"track-pings-{os.getpid()}", on_ping, replay=True, poll_ms=0.5),
+                         legs.consume_messages(on_leg, stop), refresh(), report(), lag())
 
 
 if __name__ == "__main__":

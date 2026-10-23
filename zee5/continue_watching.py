@@ -21,7 +21,7 @@ from datetime import timedelta
 
 from apache_iggy import AutoCommit, IggyClient, Partitioning, PollingStrategy, SendMessage
 
-from common import DEFAULT_URL, HEARTBEATS, RESUME_ANS, RESUME_REQ, STREAM, Window, load, msg, part
+from common import DEFAULT_URL, HEARTBEATS, RESUME_ANS, RESUME_REQ, STREAM, Window, load, msg, part, read_partitions
 
 ANS_PARTITIONS = 8
 
@@ -38,9 +38,8 @@ async def main(a):
         print("[continue-watching] waiting for viewers.py to create the topics…", flush=True)
         await asyncio.sleep(1)
     out = await (await connected()).producer(STREAM, RESUME_ANS, topic_partitions_count=ANS_PARTITIONS)
-    beats = await (await connected()).consumer_group(
-        f"continue-watching-{os.getpid()}", STREAM, HEARTBEATS, polling_strategy=PollingStrategy.First(),
-        batch_length=5000, auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+    beats = await connected()                  # the lane: direct partition reads, rebuilt from the first message
+    beat_parts = range((await admin.get_topic(STREAM, HEARTBEATS)).partitions_count)
     reqs = await (await connected()).consumer_group(
         "continue-watching-requests", STREAM, RESUME_REQ, polling_strategy=PollingStrategy.Next(),
         batch_length=1000, auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(microseconds=500))
@@ -115,7 +114,9 @@ async def main(a):
             stats.clear()
 
     stop = asyncio.Event()
-    await asyncio.gather(beats.consume_messages(on_beat, stop), reqs.consume_messages(on_request, stop), flush(), report())
+    await asyncio.gather(read_partitions(beats, HEARTBEATS, beat_parts, f"continue-watching-{os.getpid()}", on_beat,
+                                         replay=True, poll_ms=0.5),
+                         reqs.consume_messages(on_request, stop), flush(), report())
 
 
 if __name__ == "__main__":

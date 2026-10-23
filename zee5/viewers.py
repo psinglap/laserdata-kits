@@ -21,9 +21,10 @@ import time
 from collections import defaultdict
 from datetime import timedelta
 
-from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, IggyExpiry, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import DirectProducerConfig, IggyClient, IggyExpiry, Partitioning, SendMessage
 
-from common import DEFAULT_URL, DEVICES, HEARTBEATS, RESUME_ANS, RESUME_REQ, STREAM, Window, load, msg, part, viewer
+from common import (DEFAULT_URL, DEVICES, HEARTBEATS, RESUME_ANS, RESUME_REQ, STREAM, Window, load, msg, part,
+                    read_partitions, viewer)
 
 TICK = 0.02   # seconds; each viewer still beats on its own schedule, stamped when sent
 IDLE, PLAYING, SWITCHING = 0, 1, 2
@@ -59,9 +60,8 @@ async def main(a):
             await admin.create_topic(STREAM, RESUME_ANS, 8)
         except RuntimeError:
             pass                                             # created by continue_watching.py in the meantime
-    answers = await (await connected()).consumer_group(
-        "viewers-resume-check", STREAM, RESUME_ANS, polling_strategy=PollingStrategy.Next(), batch_length=2000,
-        auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(milliseconds=1))
+    answers = await connected()             # direct partition reads, offsets stored once a second
+    answer_parts = range((await admin.get_topic(STREAM, RESUME_ANS)).partitions_count)
 
     # A catalogue with a long tail: a few titles carry most of the viewing, like a weekly top-shows list.
     titles = [f"T{t:05d}" for t in range(a.titles)]
@@ -177,7 +177,8 @@ async def main(a):
                   f"resume answer p99 {r['p99']:5.1f}ms", flush=True)
             stats.clear()
 
-    await asyncio.gather(play(), answers.consume_messages(on_answer, asyncio.Event()), report())
+    await asyncio.gather(play(), read_partitions(answers, RESUME_ANS, answer_parts, "viewers-resume-check", on_answer,
+                                                 commit_s=1, batch=2000, poll_ms=1), report())
 
 
 if __name__ == "__main__":

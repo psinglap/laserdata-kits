@@ -21,9 +21,9 @@ import time
 from collections import defaultdict
 from datetime import timedelta
 
-from apache_iggy import AutoCommit, DirectProducerConfig, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import DirectProducerConfig, IggyClient, Partitioning, SendMessage
 
-from common import DEFAULT_URL, KITCHEN, ORDER_PARTITIONS, ORDERS, STREAM, GcPauses, Popularity, Window, load, msg, part
+from common import DEFAULT_URL, KITCHEN, ORDER_PARTITIONS, ORDERS, STREAM, GcPauses, Popularity, Window, load, msg, part, read_partitions
 
 
 def predict(view) -> float:
@@ -47,9 +47,8 @@ async def main(a):
         print("[fpt] waiting for kitchens.py to create the topics…", flush=True)
         await asyncio.sleep(1)
     started_ns = time.time_ns()
-    lane = await (await connected(a.url)).consumer_group(
-        f"fpt-features-{os.getpid()}", STREAM, KITCHEN, polling_strategy=PollingStrategy.First(), batch_length=5000,
-        auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+    lane = await connected(a.url)
+    lane_parts = range((await lane.get_topic(STREAM, KITCHEN)).partitions_count)
     out = await client.producer(STREAM, ORDERS, topic_partitions_count=ORDER_PARTITIONS,
                                 mode=DirectProducerConfig(batch_length=1000, linger_time=timedelta(microseconds=200)))
     pop = Popularity(a.restaurants, a.skew)
@@ -111,7 +110,8 @@ async def main(a):
                       f"broker->feature view p50 {fb['p50']:.1f} p99 {fb['p99']:.1f} max {fb['max']:.1f} ms  "
                       f"longest GC pause {gc_pause.take():.0f} ms", flush=True)
 
-    await asyncio.gather(lane.consume_messages(on_kitchen, asyncio.Event()), checkout(), report())
+    await asyncio.gather(read_partitions(lane, KITCHEN, lane_parts, f"fpt-features-{os.getpid()}", on_kitchen,
+                                         replay=True, poll_ms=0.5), checkout(), report())
 
 
 if __name__ == "__main__":

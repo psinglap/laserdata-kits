@@ -1,6 +1,6 @@
 """The Holdings service: positions kept current from the lane, and the app's refresh checked against them.
 
-Two readers, each on its own connection and consumer group:
+Two readers, each on its own connection, reading every partition directly (no consumer group):
   * position-updates (the lane): applies each fill's resulting position to the user's
     holdings view, ignoring any older or repeated sequence, and invalidates the user's
     ETag so the next Holdings request is rebuilt. Fill-to-holdings latency is timed here.
@@ -18,11 +18,11 @@ import heapq
 import os
 import time
 from collections import defaultdict
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy
+from apache_iggy import IggyClient
 
-from common import DEFAULT_URL, ORDER_UPDATES, POSITIONS, REFRESH_MS, STREAM, Window, ensure_topics, load
+from common import (DEFAULT_URL, ORDER_UPDATES, PARTITIONS, POSITIONS, REFRESH_MS, Window, ensure_topics, load,
+                    read_partitions)
 
 
 async def main(a):
@@ -33,12 +33,11 @@ async def main(a):
 
     await ensure_topics(await own_client(), POSITIONS, ORDER_UPDATES)
 
-    async def group(topic):
-        return await (await own_client()).consumer_group(
-            f"{a.name}-{topic}-{os.getpid()}", STREAM, topic, polling_strategy=PollingStrategy.First(), batch_length=5000,
-            auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+    async def reader(topic, handle):
+        # Each reader on its own connection, reading every partition directly from the first message.
+        return read_partitions(await own_client(), topic, range(PARTITIONS[topic]), f"{a.name}-{topic}-{os.getpid()}",
+                               handle, replay=True, poll_ms=0.5)
 
-    positions, orders = await group(POSITIONS), await group(ORDER_UPDATES)
     view = {}                               # user:instrument -> (seq, net qty, avg price): the holdings view
     etag_dirty = set()                      # users whose Holdings ETag was invalidated this second
     refreshes = []                          # (when the app refreshes, user:instrument, seq of the fill)
@@ -99,8 +98,7 @@ async def main(a):
             etag_dirty.clear()
             stats.clear()
 
-    stop = asyncio.Event()
-    await asyncio.gather(positions.consume_messages(on_position, stop), orders.consume_messages(on_order_update, stop),
+    await asyncio.gather(await reader(POSITIONS, on_position), await reader(ORDER_UPDATES, on_order_update),
                          app_refresh(), report())
 
 

@@ -16,11 +16,10 @@ import os
 import random
 import time
 from collections import defaultdict, deque
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import IggyClient, Partitioning, SendMessage
 
-from common import DEFAULT_URL, LISTINGS, ORDERS, STREAM, Window, load, msg
+from common import DEFAULT_URL, LISTINGS, ORDERS, STREAM, Window, load, msg, read_partitions
 
 
 async def main(a):
@@ -33,9 +32,8 @@ async def main(a):
     while not await admin.get_topic(STREAM, LISTINGS):
         print(f"[{a.name}] waiting for listings.py to create the topic…", flush=True)
         await asyncio.sleep(1)
-    lane = await (await own_client()).consumer_group(
-        f"{a.name}-{os.getpid()}", STREAM, LISTINGS, polling_strategy=PollingStrategy.First(), batch_length=5000,
-        auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+    lane = await own_client()               # direct partition reads, rebuilt from the first message
+    lane_parts = range((await admin.get_topic(STREAM, LISTINGS)).partitions_count)
     orders = await (await own_client()).producer(STREAM, ORDERS, topic_partitions_count=8)
 
     seq, qty, price = {}, {}, {}
@@ -120,7 +118,8 @@ async def main(a):
                   f"a page {a.lag:g}s behind would list {stats['stale']:,} already-sold listings ({stale:.2f}%)", flush=True)
             stats.clear()
 
-    await asyncio.gather(lane.consume_messages(on_change, asyncio.Event()), age_lagged_view(), buyers(), report())
+    await asyncio.gather(read_partitions(lane, LISTINGS, lane_parts, f"{a.name}-{os.getpid()}", on_change, replay=True,
+                                         poll_ms=0.5), age_lagged_view(), buyers(), report())
 
 
 if __name__ == "__main__":

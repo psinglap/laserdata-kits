@@ -26,12 +26,11 @@ import math
 import random
 import time
 from collections import defaultdict, deque
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import Partitioning, SendMessage
 
 from common import (DEFAULT_URL, LIQ, MARKS, PARTITIONS, POSITIONS, STREAM, Window, account, bankruptcy_price,
-                    connect, ensure_topics, instruments, liq_price, load, msg, part_of, start_price)
+                    connect, ensure_topics, instruments, liq_price, load, msg, part_of, read_partitions, start_price)
 
 LEVERAGE = (2, 3, 5, 10, 15, 20, 25)
 LEV_WEIGHTS = (8, 10, 22, 30, 12, 10, 8)
@@ -41,9 +40,7 @@ async def main(a):
     admin = await connect(a.url)
     await ensure_topics(admin, MARKS, POSITIONS, LIQ)
     mark_w, pos_w = await connect(a.url), await connect(a.url)          # one connection per writer and reader
-    orders = await (await connect(a.url)).consumer_group(
-        "order-path", STREAM, LIQ, polling_strategy=PollingStrategy.Next(), batch_length=1000,
-        auto_commit=AutoCommit.Interval(timedelta(seconds=1)), poll_interval=timedelta(microseconds=500))
+    orders = await connect(a.url)
 
     rng = random.Random(11)
     pairs = instruments(a.instruments)
@@ -251,7 +248,8 @@ async def main(a):
                   flush=True)
             st.clear()
 
-    await asyncio.gather(run(), orders.consume_messages(on_order, asyncio.Event()), report())
+    await asyncio.gather(run(), read_partitions(orders, LIQ, range(PARTITIONS[LIQ]), "order-path", on_order,
+                                                         commit_s=1, batch=1000, poll_ms=0.5), report())
 
 
 if __name__ == "__main__":

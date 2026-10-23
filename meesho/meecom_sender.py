@@ -21,7 +21,7 @@ from datetime import timedelta
 from apache_iggy import AutoCommit, IggyClient, Partitioning, PollingStrategy, SendMessage
 
 from common import (CAMPAIGN, DEFAULT_URL, ORDER_UPDATES, PARTITIONS, RECEIPTS, STREAM, Window, ensure_topics, load,
-                    msg, part)
+                    msg, part, read_partitions)
 
 
 async def connected(url):
@@ -125,10 +125,10 @@ async def main(a):
     if a.why:
         tasks.append(lag())
     if a.only in ("both", "orders"):
-        updates = await (await connected(a.url)).consumer_group("meecom-order-updates", STREAM, ORDER_UPDATES,
-                                                               poll_interval=timedelta(microseconds=500), **common)
+        updates = await connected(a.url)        # direct partition reads: the lane is latency-measured
         receipts = await (await connected(a.url)).producer(STREAM, RECEIPTS, topic_partitions_count=PARTITIONS[RECEIPTS])
-        tasks += [updates.consume_messages(on_update, stop), flush_receipts(receipts)]
+        tasks += [read_partitions(updates, ORDER_UPDATES, range(PARTITIONS[ORDER_UPDATES]), "meecom-order-updates",
+                                  on_update, commit_s=1, batch=5000, poll_ms=0.5), flush_receipts(receipts)]
     if a.only in ("both", "campaign"):
         campaign = await (await connected(a.url)).consumer_group("meecom-campaign", STREAM, CAMPAIGN,
                                                                 poll_interval=timedelta(milliseconds=5), **common)

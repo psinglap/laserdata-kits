@@ -17,11 +17,10 @@ import os
 import random
 import time
 from collections import defaultdict
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import IggyClient, Partitioning, SendMessage
 
-from common import DEFAULT_URL, INVENTORY, ORDERS, PRICING, STREAM, Window, load, msg
+from common import DEFAULT_URL, INVENTORY, ORDERS, PRICING, STREAM, Window, load, msg, read_partitions
 
 
 async def main(a):
@@ -36,12 +35,12 @@ async def main(a):
         await c.connect()
         return c
 
-    async def group(topic):
-        return await (await own_client()).consumer_group(
-            f"{a.name}-{topic}-{os.getpid()}", STREAM, topic, polling_strategy=PollingStrategy.First(), batch_length=5000,
-            auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
+    async def reader(topic, handle):
+        # Each reader on its own connection, reading every partition directly from the first message.
+        parts = range((await client.get_topic(STREAM, topic)).partitions_count)
+        return read_partitions(await own_client(), topic, parts, f"{a.name}-{topic}-{os.getpid()}", handle,
+                               replay=True, poll_ms=0.5)
 
-    inv, prices = await group(INVENTORY), await group(PRICING)
     orders = await (await own_client()).producer(STREAM, ORDERS, topic_partitions_count=8)
     seq, live, price, index = {}, defaultdict(set), {}, {}
     lat, stats = Window(), defaultdict(int)
@@ -116,8 +115,7 @@ async def main(a):
                   f"index results already gone, caught by re-validation {removed:5.2f}%", flush=True)
             stats.clear()
 
-    stop = asyncio.Event()
-    await asyncio.gather(inv.consume_messages(on_inventory, stop), prices.consume_messages(on_price, stop),
+    await asyncio.gather(await reader(INVENTORY, on_inventory), await reader(PRICING, on_price),
                          refresh_index(), search(), report())
 
 

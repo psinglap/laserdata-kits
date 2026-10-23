@@ -1,6 +1,6 @@
 """Checkout: downtime signals applied to the payment methods it shows, and the cost of a late signal counted.
 
-Reads `downtime-signals` (the lane out) on its own connection and consumer group and keeps the
+Reads `downtime-signals` (the lane out) on its own connection, every partition read directly, and keeps the
 current state of every cohort, ignoring any older or repeated sequence. Razorpay's Checkout uses
 these signals to warn customers and steer them to another instrument; merchants get the same
 signal through the Downtime API and webhooks (run a second copy with --name webhooks).
@@ -22,20 +22,16 @@ import os
 import random
 import time
 from collections import defaultdict, deque
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, PollingStrategy
+from apache_iggy import IggyClient
 
-from common import DEFAULT_URL, SIGNALS, STREAM, Window, cohorts, ensure_topics, load
+from common import DEFAULT_URL, PARTITIONS, SIGNALS, Window, cohorts, ensure_topics, load, read_partitions
 
 
 async def main(a):
     client = IggyClient.from_connection_string(a.url)   # this reader's own connection
     await client.connect()
     await ensure_topics(client, SIGNALS)
-    signals = await client.consumer_group(
-        f"{a.name}-{os.getpid()}", STREAM, SIGNALS, polling_strategy=PollingStrategy.First(), batch_length=1000,
-        auto_commit=AutoCommit.Disabled(), poll_interval=timedelta(microseconds=500))
     table = cohorts()
     keys, cum = [k for k, _, _ in table], list(itertools.accumulate(w for _, w, _ in table))
     view = {}                               # cohort -> (seq, status)
@@ -112,7 +108,8 @@ async def main(a):
                   f"resolved {total['resolved']}, offered after the flag {total['late']})", flush=True)
             stats.clear()
 
-    await asyncio.gather(signals.consume_messages(on_signal, asyncio.Event()), customers(), report())
+    await asyncio.gather(read_partitions(client, SIGNALS, range(PARTITIONS[SIGNALS]), f"{a.name}-{os.getpid()}", on_signal,
+                                         replay=True, batch=1000, poll_ms=0.5), customers(), report())
 
 
 if __name__ == "__main__":

@@ -17,11 +17,10 @@ import math
 import os
 import time
 from collections import defaultdict
-from datetime import timedelta
 
-from apache_iggy import AutoCommit, IggyClient, Partitioning, PollingStrategy, SendMessage
+from apache_iggy import IggyClient, Partitioning, SendMessage
 
-from common import DEFAULT_URL, OFFERS, PICKUP, PINGS, RIDES, STREAM, Window, cell, load, msg, part
+from common import DEFAULT_URL, OFFERS, PICKUP, PINGS, RIDES, STREAM, Window, cell, load, msg, part, read_partitions
 
 OFFER_PARTITIONS = PICKUP_PARTITIONS = 8
 
@@ -45,13 +44,10 @@ async def main(a):
         print("[match] waiting for captains.py to create the topics…", flush=True)
         await asyncio.sleep(1)
     started_ns = time.time_ns()
-    poll = dict(batch_length=5000, auto_commit=AutoCommit.Disabled())
-    pings = await (await connected()).consumer_group(f"match-pings-{os.getpid()}", STREAM, PINGS,
-                                                    polling_strategy=PollingStrategy.First(),
-                                                    poll_interval=timedelta(microseconds=500), **poll)
-    rides = await (await connected()).consumer_group(f"match-rides-{os.getpid()}", STREAM, RIDES,
-                                                    polling_strategy=PollingStrategy.First(),
-                                                    poll_interval=timedelta(milliseconds=1), **poll)
+    # Direct partition reads, each topic on its own connection, rebuilt from the first message.
+    pings, rides = await connected(), await connected()
+    ping_parts = range((await admin.get_topic(STREAM, PINGS)).partitions_count)
+    ride_parts = range((await admin.get_topic(STREAM, RIDES)).partitions_count)
     offers_p = await (await connected()).producer(STREAM, OFFERS, topic_partitions_count=OFFER_PARTITIONS)
     track_p = await (await connected()).producer(STREAM, PICKUP, topic_partitions_count=PICKUP_PARTITIONS)
 
@@ -172,8 +168,10 @@ async def main(a):
                       flush=True)
             stats.clear()
 
-    stop = asyncio.Event()
-    await asyncio.gather(pings.consume_messages(on_ping, stop), rides.consume_messages(on_ride, stop),
+    await asyncio.gather(read_partitions(pings, PINGS, ping_parts, f"match-pings-{os.getpid()}", on_ping, replay=True,
+                                         poll_ms=0.5),
+                         read_partitions(rides, RIDES, ride_parts, f"match-rides-{os.getpid()}", on_ride, replay=True,
+                                         poll_ms=1),
                          flush(offers_p, out_offers, OFFER_PARTITIONS), flush(track_p, out_track, PICKUP_PARTITIONS),
                          report())
 
