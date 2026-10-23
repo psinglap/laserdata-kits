@@ -24,7 +24,7 @@ timeout 76 python -u event_gateway.py --name gw-1 --partners corr-01 corr-02 cor
 timeout 76 python -u event_gateway.py --name gw-2 --partners corr-04 corr-05 corr-06 --slow corr-06 \
   --slow-at 20 --slow-for 15 --slow-rate 25 > gw-2.log 2>&1 &
 wait || true
-echo "--- oms.log"; head -n 2 oms.log; grep rebalance oms.log | sed -n 5p || true; tail -n 2 oms.log
+echo "--- oms.log"; head -n 2 oms.log; grep "(rebalance" oms.log | sed -n 5p || true; tail -n 2 oms.log
 for g in gw-1 gw-2; do
   echo "--- $g.log"; head -n 1 $g.log; grep -E "caught up with|catching up" $g.log | tail -n 2 || true; tail -n 2 $g.log
 done
