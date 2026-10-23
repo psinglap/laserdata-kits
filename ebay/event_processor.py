@@ -152,5 +152,5 @@ if __name__ == "__main__":
     p.add_argument("--window-size", type=int, default=200, help="subscriptions per window (eBay's post: 200)")
     p.add_argument("--broadcast-every", type=float, default=5, help="seconds between broadcast events")
     p.add_argument("--broadcast-at", type=float, default=3, help="seconds after start of the first broadcast")
-    p.add_argument("--complete-budget-ms", type=int, default=500, help="time from event to every window pushed")
+    p.add_argument("--complete-budget-ms", type=int, default=250, help="time from event to every window pushed")
     asyncio.run(main(p.parse_args()))

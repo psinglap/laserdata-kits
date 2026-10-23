@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CI smoke test: start Apache Iggy 0.9.0, run the broadcast push lane at small scale for about a minute (unicast
 # notifications, a 20,000-subscription broadcast every 2 s split into 100 windows, planted endpoint outages), and
-# pass only if the push lane reports PASS, every broadcast is pushed to every window within its budget, and
+# pass only if the push lane reports PASS, every broadcast is pushed to every window within 250 ms, and
 # not-acknowledged pushes are acknowledged after retry on their own topic.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -51,13 +51,13 @@ if busy and quiet:
         st.median(busy), len(busy), st.median(quiet), len(quiet)))
 b = [l for l in open("esp.log") if "] broadcast " in l]
 ms = nums(r"all pushed \+([0-9]+) ms", b)
-late = sum(1 for x in ms if x > 500)
-print("broadcasts pushed to all 100 windows: %d  completion p50 %.0f ms  max %.0f ms  over 500 ms: %d" % (
+late = sum(1 for x in ms if x > 250)
+print("broadcasts pushed to all 100 windows: %d  completion p50 %.0f ms  max %.0f ms  over 250 ms: %d" % (
     len(ms), st.median(ms) if ms else 0, max(ms) if ms else 0, late))
 if len(ms) < 25:
     raise SystemExit("fewer than 25 broadcasts reached every window")
 if late * 100 > len(ms) * 5:
-    raise SystemExit("more than 5% of broadcasts took over 500 ms to reach every window")
+    raise SystemExit("more than 5% of broadcasts took over 250 ms to reach every window")
 first, held = sum(nums(r"acknowledged first time ([0-9,]+)", b)), sum(nums(r"held for retry ([0-9,]+)\)", b))
 print("broadcast pushes: acknowledged first time %d, held for retry %d (%.2f%%)" % (first, held, 100 * held / max(first + held, 1)))
 e = [l for l in open("esp.log") if "open over 5 s" in l][10:-3]

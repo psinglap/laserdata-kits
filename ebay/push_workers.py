@@ -134,6 +134,8 @@ async def main(a):
                         nxt[(topic, p)] = ms[-1].offset() + 1
                         for m in ms:
                             cb(load(m.payload()))
+                            if topic == TASKS:
+                                await asyncio.sleep(0)   # after each window, let the other workers read
                         more = more or len(ms) == a.batch
                 if not more:
                     await asyncio.sleep(a.poll_ms / 1000)
