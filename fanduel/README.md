@@ -11,6 +11,7 @@ This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy
 LaserData builds and runs.
 
 - **Write-up:** (link added when published)
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.fanduel-kit
 - **One slide:** [`LaserData_FanDuel_InStateWallet.pdf`](LaserData_FanDuel_InStateWallet.pdf)
 
 ## Why this use case
