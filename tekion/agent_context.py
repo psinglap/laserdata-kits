@@ -78,7 +78,7 @@ async def main(a):
         return hit[1]
 
     async def agents():
-        n, per_tick, due = 0, max(1, int(a.answers_per_s / 100)), time.monotonic()
+        n, owed, due = 0, 0.0, time.monotonic()
         rooftops = None
         async with bookings:
             while True:
@@ -88,6 +88,9 @@ async def main(a):
                     continue
                 rooftops = rooftops or sorted(in_stock)
                 now, out = time.monotonic(), []
+                owed += a.answers_per_s / 100      # answers this 10 ms tick owes, fractions carried to the next
+                per_tick = int(owed)
+                owed -= per_tick
                 for _ in range(per_tick):
                     r = random.choice(rooftops)
                     live = in_stock[r]
