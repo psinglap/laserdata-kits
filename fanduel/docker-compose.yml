@@ -1,0 +1,32 @@
+# Two Apache Iggy brokers stand in for two sites inside one state: nj-1 (the site taking bets today) and nj-2
+# (the second in-state site that takes over if nj-1 goes dark). On your hardware they run at two sites; here
+# they share one host so the kit runs anywhere.
+services:
+  iggy-nj-1:
+    image: apache/iggy:0.9.0
+    container_name: iggy-nj-1
+    cap_add: [SYS_NICE]
+    security_opt: [seccomp:unconfined]
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+    environment:
+      - IGGY_ROOT_USERNAME=iggy
+      - IGGY_ROOT_PASSWORD=iggy
+      - IGGY_TCP_ADDRESS=0.0.0.0:8090          # listen beyond the container's loopback
+      - IGGY_HTTP_ADDRESS=0.0.0.0:3000
+      - IGGY_NODE_ADVERTISED_ADDRESS=localhost
+    ports: ["8090:8090", "3000:3000"]
+  iggy-nj-2:
+    image: apache/iggy:0.9.0
+    container_name: iggy-nj-2
+    cap_add: [SYS_NICE]
+    security_opt: [seccomp:unconfined]
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+    environment:
+      - IGGY_ROOT_USERNAME=iggy
+      - IGGY_ROOT_PASSWORD=iggy
+      - IGGY_TCP_ADDRESS=0.0.0.0:8090
+      - IGGY_HTTP_ADDRESS=0.0.0.0:3000
+      - IGGY_NODE_ADVERTISED_ADDRESS=localhost
+    ports: ["8091:8090", "3001:3000"]
