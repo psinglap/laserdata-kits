@@ -6,6 +6,7 @@ milliseconds, even in a live game's ad break. It runs beside Kafka, so nothing e
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source
 engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.roku-kit
 - **One slide:** [`LaserData_Roku_LiveFloors.pdf`](LaserData_Roku_LiveFloors.pdf)
 
 ## Why this use case
