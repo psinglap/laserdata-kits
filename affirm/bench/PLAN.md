@@ -9,7 +9,7 @@ Rules are fixed before any result exists. If Kafka wins a step, that row is publ
 | Parameter | Value | Why |
 |---|---|---|
 | Aggregate size | ~300 B | Customer, counter, schema version, total repaid, outstanding, charged off (and unpaid), overdue, open disputes, timestamp. |
-| Rate | 500 → 2K → 10K → 50K aggregates/s | Affirm reported about 53 million transactions in the June 2026 quarter, plus their repayments; the top steps are headroom, not a claim about Affirm's volume. |
+| Rate | 500 → 2K → 10K → 50K aggregates/s | Affirm does not publish loan-event rates; press coverage of the June 2026 quarter puts transactions at about 53 million, plus their repayments. The top steps are headroom, not a claim about Affirm's volume. |
 | Partitions | 16, keyed by customer | Each customer's aggregates apply in counter order. |
 | Readers | 3 | The feature platform's consumer, a fraud-rule reader with a tight freshness bound, and the offline reconstruction reader. |
 | Durability | Iggy `replicated` × 3 · Kafka `acks=all`, RF 3, min ISR 2 | A lost aggregate is a credit decision on old data. |
