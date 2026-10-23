@@ -64,6 +64,7 @@ class Judge:
         self.fired = Counter()
         self.dirty = set()
         self.tip = {}                       # cohort -> when the newest verdict became knowable (ns)
+        self.tip_fail = {}                  # cohort -> deadline of the newest failed story (ns)
 
     def add(self, cohort, sec, client, ok, missing, due_ns):
         b = self.buckets[cohort]
@@ -77,6 +78,7 @@ class Judge:
         cell[client] = min(cell.get(client, 1), ok)
         if missing:
             self.missing[cohort][sec].update(missing)
+            self.tip_fail[cohort] = max(self.tip_fail.get(cohort, 0), due_ns)
         self.dirty.add(cohort)
         self.tip[cohort] = max(self.tip.get(cohort, 0), due_ns)
 
@@ -232,7 +234,9 @@ async def main(a):
                 if state == "clear":
                     del judge.alerting[cohort]
                 stats[state] += 1
-                tip = judge.tip[cohort]
+                # a fire is timed from the deadline of the failed story that tipped it, a clear from the newest
+                # verdict: the moment each became knowable
+                tip = judge.tip_fail.get(cohort, 0) if state == "fire" else judge.tip[cohort]
                 if (now - tip) / 1e9 > a.replay_alert_s:
                     continue                # rebuilt from long ago: nobody needs this alert now
                 pending.append(SendMessage(msg(story=cohort[0], sf=cohort[1], state=state, alert=n, due_ns=tip,
