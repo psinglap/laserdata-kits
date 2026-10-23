@@ -43,7 +43,7 @@ kill "$PIPE" || true
 
 echo "--- collectors.log"; head -n 2 collectors.log; tail -n 2 collectors.log
 echo "--- pipe.log (outage, restart and the last lines)"
-grep -E "insert failed|is back|unavailable for 1?[05] s|restored|no pipe-state" pipe.log || true
+grep -E "insert failed|is back|unavailable for 1?[05] s|restored|no pipe-state|catching up" pipe.log || true
 grep -v totals pipe.log | tail -n 4; grep totals pipe.log | tail -n 1
 echo "--- FAIL seconds (line: output)"; grep -n "FAIL (" pipe.log | cut -c1-170 || true
 # Skip a 10 s warm-up; a shared CI runner may blip, so require 95% of seconds to pass. Seconds while ClickHouse is
@@ -73,6 +73,16 @@ print("ClickHouse outage: up to %d events held in Iggy" % max(held or [0]))
 catch = [l for l in log if "catching up" in l]
 print("catching-up seconds %d (start, outage, restart); oldest held event %.1f s" % (
     len(catch), max(nums(r"oldest ([0-9.]+) s", catch) or [0])))
+back = next((i for i, l in enumerate(log) if "is back after" in l), None)
+if back is not None:
+    drain = []
+    for l in log[back + 1:]:
+        if "catching up" in l:
+            drain.append(l)
+        elif re.search(r"rows/s in", l):
+            break
+    print("after the outage: %d catching-up seconds, %d held events inserted, then live again" % (
+        len(drain), sum(nums(r"inserted ([0-9,]+) held", drain))))
 # The pipe is killed and restarted mid-run, so add up the last totals line of each process.
 runs, cur = [], []
 for l in log:
