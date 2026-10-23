@@ -67,6 +67,11 @@ async def main(a):
     def on_record(m, now):
         d = load(m.payload())
         ns = d["ns"]
+        stats["batches"] += 1
+        if d["b"] in seen:
+            stats["dupes"] += 1             # delivered twice (at least once): already counted, and already timed
+            return
+        seen[d["b"]] = ns
         age = (now - ns) / 1e6
         if caught_up[0]:
             lat.add(age)
@@ -76,11 +81,6 @@ async def main(a):
         else:                               # still replaying: track the oldest record seen this second
             stats["replayed"] += 1
             stats["max_age"] = max(stats["max_age"], age)
-        stats["batches"] += 1
-        if d["b"] in seen:
-            stats["dupes"] += 1             # delivered twice (at least once): already counted
-            return
-        seen[d["b"]] = ns
         app, x = d["a"], d["x"]
         w = apps[app]
         w.add(ns, d["s"], x)
