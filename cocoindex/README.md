@@ -7,6 +7,7 @@ losing a change. Resolved threads are deleted from the table. Your Kafka path st
 This kit lets your team check that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs, CocoIndex 1.0.26 and Postgres 17 with pgvector.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.cocoindex-kit
 - **One slide:** [`LaserData_CocoIndex_ReviewContext.pdf`](LaserData_CocoIndex_ReviewContext.pdf)
 
 ## Why this use case
