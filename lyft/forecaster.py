@@ -78,7 +78,7 @@ async def main(a):
                                        % (r, f, n, 1 if (i == 0 and event) else 0, time.time_ns())).encode()))
                 st["chunks"] += n
                 st["seals"] += 1
-            sends.append(asyncio.create_task(writer.send_messages(STREAM, FORECASTS, Partitioning.partition_id(p), ms)))
+            sends.append(asyncio.ensure_future(writer.send_messages(STREAM, FORECASTS, Partitioning.partition_id(p), ms)))
             await asyncio.sleep(0)          # let this partition's send go out while the next one is built
         await asyncio.gather(*sends)
         st["frames"] += 1
