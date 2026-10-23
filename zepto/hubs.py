@@ -60,18 +60,40 @@ async def main(a):
         price_seq[k] += 1
         return SendMessage(msg(k=k, seq=price_seq[k], price=price[k]))
 
+    sold, statuses = [], []                 # writes from accepted orders, sent by send_order_writes(), not in the callback
+
     async def on_order(m):
+        # No awaited sends here: a send per order inside the order reader made each order wait a round trip.
         o = load(m.payload())
         k = o["k"]
         if level[k] > 0:
             level[k] -= 1
             stats["accepted"] += 1
-            await inv_p.send_with_partitioning([inv_change(k)], Partitioning.partition_id(part[k]))
+            sold.append((k, inv_change(k)))
             status = "confirmed"
         else:
             stats["rejected"] += 1      # shown as in stock after re-validation, already gone
             status = "rejected_sold_out"
-        await status_p.send_with_partitioning([SendMessage(msg(order=o["order"], status=status))], Partitioning.messages_key(o["order"]))
+        statuses.append((zlib.crc32(o["order"].encode()) % 8, SendMessage(msg(order=o["order"], status=status))))
+
+    async def send_order_writes():
+        # Every 5 ms, everything the order reader queued: stock levels one batch per partition (same partition as
+        # every other change to that hub:sku), order statuses one batch per partition of order-status.
+        due = time.monotonic()
+        while True:
+            due += 0.005
+            await asyncio.sleep(max(0.0, due - time.monotonic()))
+            if not (sold or statuses):
+                continue
+            inv, st = sold[:], statuses[:]
+            sold.clear()
+            statuses.clear()
+            by_part = defaultdict(list)
+            for pid, sm in st:
+                by_part[pid].append(sm)
+            await asyncio.gather(send_by_partition(inv_p, inv),
+                                 *(status_p.send_with_partitioning(ms, Partitioning.partition_id(pid))
+                                   for pid, ms in by_part.items()))
 
     async def snapshot():
         # Starting level and price of every SKU, like a CDC snapshot.
@@ -111,7 +133,7 @@ async def main(a):
             print(f"[hubs] orders accepted {stats['accepted']:,}  rejected as sold out {stats['rejected']:,}  "
                   f"shown-but-gone {rate:.3f}%", flush=True)
 
-    await asyncio.gather(churn(), orders.consume_messages(on_order, asyncio.Event()), report())
+    await asyncio.gather(churn(), send_order_writes(), orders.consume_messages(on_order, asyncio.Event()), report())
 
 
 if __name__ == "__main__":
