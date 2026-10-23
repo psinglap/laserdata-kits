@@ -6,6 +6,7 @@ signed and free of card numbers. It runs beside Kafka, so nothing else has to mo
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.block-kit
 - **One slide:** [`LaserData_Block_PaymentTokens.pdf`](LaserData_Block_PaymentTokens.pdf)
 
 ## Why this use case
