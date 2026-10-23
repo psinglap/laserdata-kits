@@ -16,15 +16,15 @@ python -m py_compile common.py buyers.py inbox.py storefront_events.py kafka_bri
 # The conversation view starts first and creates the topics; the buyers and the neighbour follow.
 timeout 78 python -u inbox.py > inbox.log 2>&1 &
 sleep 3
-# 1,500 buyer signals a second over 200,000 chatting buyers, 40% followed by a reply 0.3-3 s later,
+# 1,500 buyer signals a second over 20,000 chatting buyers (each acting every ~13 s, so carts reach checkout), 40% followed by a reply 0.3-3 s later,
 # 2x for 15 s from second 30 (Black Friday opening); 1 MB/s of storefront events from second 20.
-timeout 72 python -u buyers.py --buyers 200000 --signals-per-s 1500 --surge 2 --surge-at 30 --surge-for 15 > buyers.log 2>&1 &
+timeout 72 python -u buyers.py --buyers 20000 --signals-per-s 1500 --surge 2 --surge-at 30 --surge-for 15 > buyers.log 2>&1 &
 timeout 70 python -u storefront_events.py --mbps 1 --at 20 --duration 35 > storefront.log 2>&1 &
 wait || true
 # What-if: the same buyers, with the conversation view applying each signal only once it is 1 s old.
 timeout 45 python -u inbox.py --name hold --hold-ms 1000 > hold.log 2>&1 &
 sleep 3
-timeout 40 python -u buyers.py --buyers 200000 --signals-per-s 1500 --surge 1 > buyers-hold.log 2>&1 &
+timeout 40 python -u buyers.py --buyers 20000 --signals-per-s 1500 --surge 1 > buyers-hold.log 2>&1 &
 wait || true
 echo "--- buyers.log";      head -n 2 buyers.log; tail -n 4 buyers.log
 echo "--- inbox.log";       tail -n 8 inbox.log

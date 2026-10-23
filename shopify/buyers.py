@@ -58,7 +58,6 @@ async def main(a):
         product = ""
         if status == CHECKOUT and r < a.order_share:
             kind, b[0], b[2] = "order_completed", ORDERED, f"#{next(next_order)}"
-            stats["orders"] += 1
             subtotal = before[1]
             b[1] = cart = {}                            # the order clears the cart
         elif cart and status == CART and r < 0.18:
@@ -135,7 +134,7 @@ async def main(a):
                   f"checkout {stats['checkout_started']:,}  orders {stats['order_completed']:,}  "
                   f"replies {stats['agent'] + stats['staff']:,} (agent {stats['agent']:,}, staff {stats['staff']:,})  "
                   f"buyers chatting {len(buyers):,}", flush=True)
-            for k in kinds + ["agent", "staff", "orders"]:
+            for k in kinds + ["agent", "staff"]:
                 stats[k] = 0
 
     await asyncio.gather(run_loop(), report())
