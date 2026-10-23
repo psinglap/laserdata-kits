@@ -64,7 +64,8 @@ async def coco_lifespan(builder: coco.EnvironmentBuilder) -> AsyncIterator[None]
         yield
 
 
-stats = {"applied": 0, "read": 0, "offset": -1, "first": None, "engine_ready": False, "t0": time.monotonic()}
+stats = {"applied": 0, "read": 0, "offset": -1, "first": None, "engine_ready": False, "t0": time.monotonic(),
+         "end": 0, "caught_up": False}
 
 
 @coco.fn
@@ -82,6 +83,9 @@ def key(message):
     stats["offset"] = message.offset()
     if stats["first"] is None:
         stats["first"] = message.offset()
+    if not stats["caught_up"] and message.offset() >= stats["end"] - 1:
+        stats["caught_up"] = True
+        print(f"[index] caught up with the topic after {time.monotonic() - stats['t0']:.1f} s; live", flush=True)
     return key_of(message)
 
 
@@ -94,20 +98,27 @@ async def app_main() -> None:
     # Iggy consumer stalls once it reads batch_length past the stored offset (apache-iggy 0.9 consumer docs), so the
     # batch must cover every change in flight; the connector's default of 100 caps it near 100 per write latency.
     # poll_interval: without one the consumer re-polls in a busy loop while it waits for offsets to be stored.
+    # initial_high_watermark: a watermark the source never reaches, so it never takes its own "caught up" branch.
+    # In cocoindex 1.0.26 that branch starts a second read while the first is still pending, and the message the
+    # first one receives is dropped: one lost change per start (seen on CI, and in _source.py's watch loop).
+    # ReadyFirst signals readiness instead, and this script logs when it has caught up.
     threads = iggy.topic_as_map(coco.use_context(IGGY), A.group, STREAM, A.topic, key=key, is_deletion=is_deletion,
-                                batch_length=A.batch, poll_interval=timedelta(milliseconds=10))
+                                batch_length=A.batch, poll_interval=timedelta(milliseconds=10),
+                                initial_high_watermark=NEVER)
     await coco.mount_each(process_thread, ReadyFirst(threads), table)
+
+
+NEVER = 2 ** 62
 
 
 class ReadyFirst:
     """Signal CocoIndex ready before the first message, then let the connector deliver.
 
-    Found while building this kit (CocoIndex 1.0.25 and 1.0.26, Postgres target): in live mode, rows that a
+    Found while building this kit (cocoindex 1.0.25 and 1.0.26, Postgres target): in live mode, rows that a
     LiveMapFeed declares before it calls mark_ready() are deleted again when the engine finishes its readiness pass,
     and builds in flight at that moment fail with "tracking info not found for commit". The Kafka and Iggy sources both
     deliver their backlog first and mark ready once caught up, so a fresh index lost most of its first rows. Marking
-    ready first and waiting for the engine to report READY avoids it; the connector's own "caught up" signal is kept
-    as a log line.
+    ready first and waiting for the engine to report READY avoids it.
     """
 
     def __init__(self, feed):
@@ -117,21 +128,7 @@ class ReadyFirst:
         await subscriber.mark_ready()
         while not stats["engine_ready"]:
             await asyncio.sleep(0.01)
-        await self._feed.watch(_CaughtUpLogger(subscriber))
-
-
-class _CaughtUpLogger:
-    def __init__(self, subscriber):
-        self._sub = subscriber
-
-    async def update(self, key, value):
-        return await self._sub.update(key, value)
-
-    async def delete(self, key):
-        return await self._sub.delete(key)
-
-    async def mark_ready(self):
-        print(f"[index] caught up with the topic after {time.monotonic() - stats['t0']:.1f} s; live", flush=True)
+        await self._feed.watch(subscriber)
 
 
 app = coco.App(coco.AppConfig(name="IggyReviewContext"), app_main)
@@ -162,7 +159,7 @@ async def main():
     await probe.connect()
     while not await probe.get_topic(STREAM, A.topic):     # the review service creates it; CocoIndex never does
         await asyncio.sleep(0.5)
-    end = await topic_end(probe, A.topic)
+    end = stats["end"] = await topic_end(probe, A.topic)
     print(f"[index] topic {STREAM}/{A.topic} ends at offset {end:,}; table {A.table} in Postgres", flush=True)
     tasks = [asyncio.create_task(heartbeat()), asyncio.create_task(report(end))]
     stats["t0"] = time.monotonic()
