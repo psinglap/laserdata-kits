@@ -7,6 +7,7 @@ to move.
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source
 engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.kalshi-kit
 - **One slide:** [`LaserData_Kalshi_OrderGroups.pdf`](LaserData_Kalshi_OrderGroups.pdf)
 
 ## Why this use case
