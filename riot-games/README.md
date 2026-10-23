@@ -6,6 +6,7 @@ before the cheater's next shot lands. It runs beside MSK, so nothing else has to
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.riot-games-kit
 - **One slide:** [`LaserData_RiotGames_MatchTermination.pdf`](LaserData_RiotGames_MatchTermination.pdf)
 
 ## Why this use case
