@@ -79,6 +79,7 @@ for name, lines in (("after warm-up", f), ("during the final hour", fin)):
           "a pool refreshed every 3 s would re-pick %d (sold out %d, over the deal price %d, %.2f%%) and find no seat for %d (%.2f%%)" % (
           name, len(lines), c, b, bg, bo, 100 * b / max(c, 1), bn, un, s, sg, so, 100 * s / max(c, 1), sn, 100 * sn / max(c, 1)))
 c, b, _, _, bn, s, _, _, sn, un = tot(f)
+print("zone orders not placed because no Zone Deal was on offer at that moment (after warm-up): %d" % sum(nums(r"no deal shown ([0-9,]+)", f)))
 pp = [l for l in f if "order-to-pick" in l]
 print("order-to-pick, median per second: p50 %.1f ms  p99 %.1f ms" % (
     st.median(nums(r"pick p50 ([0-9.]+)ms", pp)), st.median(nums(r"pick p50 [0-9.]+ms p99 ([0-9.]+)ms", pp))))

@@ -52,6 +52,7 @@ async def main(a):
     ids = itertools.count(1)
     st, lat, run = defaultdict(int), Window(), {"final": False, "dropped": False}
     pending = {}                   # order id -> (created ns, zone key, qty, paid)
+    held = defaultdict(int)        # zone key -> tickets in orders not picked yet
 
     def emit(k, kind):
         v = lst[k]
@@ -130,9 +131,11 @@ async def main(a):
               f"orders x{a.final_hour:g} and {a.hot_changes:g} changes/s on it for {a.final_for:g} s", flush=True)
 
     def shows_deal(z, q):
-        # The app offers a zone's Zone Deal only while some listing in it has the tickets at or under the deal price.
+        # The app offers a zone's Zone Deal only while some listing in it has the tickets at or under the deal price,
+        # after the tickets of orders still being picked.
         d = deal[z]
-        return any(lst[k][QTY] >= q and lst[k][PRICE] <= d for k in by_zone[z])
+        room = sum(lst[k][QTY] for k in by_zone[z] if lst[k][PRICE] <= d) - held[z]
+        return room >= q and any(lst[k][QTY] >= q and lst[k][PRICE] <= d for k in by_zone[z])
 
     def tick_fans(n_orders, n_hot, now_ns):
         orders = []
@@ -148,6 +151,7 @@ async def main(a):
                 continue
             oid = f"o{next(ids)}"
             pending[oid] = (now_ns, z, q, deal[z])
+            held[z] += q
             orders.append((z, SendMessage(msg(id=oid, z=z, qty=q, paid=deal[z], ns=now_ns))))
             st["orders"] += 1
         return orders
@@ -201,7 +205,8 @@ async def main(a):
             return                         # picked twice (at-least-once) or already timed out
         lat.add((time.time_ns() - o[0]) / 1e6)
         st["picked"] += 1
-        _, _, q, paid = o
+        _, z, q, paid = o
+        held[z] -= q
         # Judge both picks against the same state, before this pick's sale is applied.
         live_v = verdict(pk["k"], q, paid) if pk["k"] else "none"
         alt_v = verdict(pk["alt"], q, paid) if pk["alt"] else "none"
@@ -244,7 +249,8 @@ async def main(a):
             await asyncio.sleep(1)
             cutoff = time.time_ns() - 5_000_000_000
             for oid in [o for o, p in pending.items() if p[0] < cutoff]:
-                del pending[oid]
+                _, z, q, _ = pending.pop(oid)
+                held[z] -= q
                 st["unpicked"] += 1        # no pick within 5 s: the fan waits on a spinner
             r = lat.flush()
             c = st["picked"]
