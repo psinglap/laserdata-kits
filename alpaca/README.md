@@ -7,6 +7,7 @@ losing events. It runs beside Redpanda, so the OMS and its write-ahead log don't
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.alpaca-kit
 - **One slide:** [`LaserData_Alpaca_PartnerTradeEvents.pdf`](LaserData_Alpaca_PartnerTradeEvents.pdf)
 
 ## Why this use case
