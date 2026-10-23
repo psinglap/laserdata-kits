@@ -12,8 +12,8 @@ drops messages under load; on the lane, once an event is in the log, every route
 
 Decoding follows vLLM's KV event format (multipart: topic, 8-byte big-endian sequence, msgpack EventBatch of
 tagged arrays: BlockStored, BlockRemoved, AllBlocksCleared). Check it against your engine version and adapt
-to_events(). For TensorRT-LLM, whose executor returns KV cache events through its API, call publish() from the
-loop that already reads them.
+to_events(). For TensorRT-LLM, whose executor returns KV cache events through its API, send the same lane message
+(the body of publish() in main) from the loop that already reads them.
 In a shadow run only the lane is timed; the clock starts when the bridge receives the batch.
 Needs: pip install pyzmq msgpack apache-iggy==0.9.0
 """
