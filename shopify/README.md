@@ -78,7 +78,19 @@ cart`; and if the buyer had already placed the order, it counts as `order placed
 What-if: `python inbox.py --hold-ms 1000` applies every signal only once it is 1 s old, as a one-second
 processing window would, so you can see how many replies such a path writes from a stale view.
 
-**What the numbers mean.** CI numbers are added after the green runs.
+**What the numbers mean.** The kit times each signal from the moment `buyers.py` sends it to the moment
+`inbox.py` has applied it to the conversation, through Python clients, on whatever machine you run it on.
+On a shared GitHub runner (2 vCPU), with the broker and four Python processes on one box, at 1,500 buyer
+signals a second over 20,000 chatting buyers (2x for 15 s as the surge), three green CI runs held p50 5.2 to
+7.7 ms, p99 8.8 to 14.1 ms and p99.9 9.9 to 15.5 ms (median per second over 62 steady-state seconds each, no
+second over the 50 ms budget). Through the surge (3,000 signals a second) the median per-second p99 was 10.2
+to 17.8 ms, worst 11.3 to 20.0 ms, with a 1 MB/s storefront stream next door. Of about 45,600 to 45,900
+replies per run, around 6,000 orders completed while chatting, no reply was written without the buyer's last
+signal, none on a wrong cart and no placed order went unseen. The what-if with every signal applied 1 s late
+wrote 25.8 to 25.9% of replies (median per second) from a stale view: about 5,000 replies per run on a wrong
+cart, 181 to 201 of them to a buyer who had already placed the order. That is the end-to-end lane through
+this demo code at reduced scale, not the broker alone; the broker's own tail latency is measured with
+`iggy-bench` on dedicated machines (`bench/PLAN.md`).
 
 | File | What it is |
 |---|---|
