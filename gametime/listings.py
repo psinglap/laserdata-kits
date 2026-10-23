@@ -67,7 +67,7 @@ async def main(a):
             z = zone_key(e, zn)
             mid = base * (1.0 + 0.35 * (len(zones) - i) / len(zones)) * (2.2 if zn in ("CLUB", "FLOOR") else 1.0)
             prices = []
-            for _ in range(a.listings):
+            for _ in range(a.listings * (a.hot_x if e == 0 else 1)):    # the hottest event is a bigger venue
                 k = f"L{next(ids):08d}"
                 price = round(mid * rng.uniform(0.75, 1.4))
                 lst[k] = [e, z, rng.choice((0, 2, 2, 2, 4, 4, 6, 8)), price, round(price * rng.uniform(0.55, 0.85)),
@@ -129,13 +129,24 @@ async def main(a):
         print(f"[listings] final hour on E{e:05d}: automatic pricing dropped {n:,} listings, Zone Deals down 15%, "
               f"orders x{a.final_hour:g} and {a.hot_changes:g} changes/s on it for {a.final_for:g} s", flush=True)
 
+    def shows_deal(z, q):
+        # The app offers a zone's Zone Deal only while some listing in it has the tickets at or under the deal price.
+        d = deal[z]
+        return any(lst[k][QTY] >= q and lst[k][PRICE] <= d for k in by_zone[z])
+
     def tick_fans(n_orders, n_hot, now_ns):
         orders = []
         for j in range(n_orders + n_hot):
             e = 0 if j >= n_orders else rng.choices(range(a.events), weight)[0]
-            z = zone_key(e, zones[rng.randrange(len(zones))])
-            oid = f"o{next(ids)}"
             q = rng.choice((1, 2, 2, 2, 3, 4))
+            for _ in range(3):                 # a fan looks at up to three zones for a deal on their event
+                z = zone_key(e, zones[rng.randrange(len(zones))])
+                if shows_deal(z, q):
+                    break
+            else:
+                st["no_deal"] += 1             # no Zone Deal on this event for that many tickets right now
+                continue
+            oid = f"o{next(ids)}"
             pending[oid] = (now_ns, z, q, deal[z])
             orders.append((z, SendMessage(msg(id=oid, z=z, qty=q, paid=deal[z], ns=now_ns))))
             st["orders"] += 1
@@ -244,7 +255,7 @@ async def main(a):
                   f"(sold out {st['live_gone']:,} over the deal price {st['live_over']:,}) no seat {st['live_none']:,}  "
                   f"a pool refreshed every {a.refresh_s:g}s would re-pick {alt:,} "
                   f"(sold out {st['alt_gone']:,} over the deal price {st['alt_over']:,}) no seat {st['alt_none']:,}  "
-                  f"tickets sold {st['tickets']:,}  unpicked {st['unpicked']:,}  "
+                  f"tickets sold {st['tickets']:,}  no deal shown {st['no_deal']:,}  unpicked {st['unpicked']:,}  "
                   f"order-to-pick p50 {r['p50']:.1f}ms p99 {r['p99']:.1f}ms  "
                   f"tick late max {st['late_ms']:.0f}ms  send max {st['send_ms']:.0f}ms", flush=True)
             st.clear()
@@ -258,6 +269,7 @@ if __name__ == "__main__":
     p.add_argument("--events", type=int, default=1000, help="events on sale")
     p.add_argument("--zones", type=int, default=8, help="Zone Deals zones per venue map (up to 8)")
     p.add_argument("--listings", type=int, default=30, help="seller listings per zone")
+    p.add_argument("--hot-x", type=int, default=4, help="listings multiplier for the hottest event (a bigger venue)")
     p.add_argument("--auto-share", type=float, default=0.6, help="share of listings on automatic pricing")
     p.add_argument("--rate", type=float, default=2000, help="listing changes per second, all events")
     p.add_argument("--orders", type=float, default=80, help="Zone Deals orders per second")

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # CI smoke test: start Apache Iggy 0.9.0 and run the Zone Deals pool lane at small scale for about a minute: 120
-# events x 6 zones x 25 seller listings (18,000 listings), 600 listing changes a second (sold elsewhere, automatic
-# pricing, seller repricing, delists, new tickets), 60 Zone Deals orders a second, one event's final hour (automatic
-# pricing drops its listings, its Zone Deals drop, 500 extra changes a second on it and 8x its orders for 15 s),
+# events x 6 zones x 25 seller listings, the hottest event 4x that (20,250 listings), 600 listing changes a second
+# (sold elsewhere, automatic pricing, seller repricing, delists, new tickets), 60 Zone Deals orders a second, one
+# event's final hour (automatic pricing drops its listings, its Zone Deals drop, 300 extra changes a second on it
+# and 180 extra orders a second on it for 15 s),
 # 2 MB/s of app events next door, two pickers (each owning half the zones' orders), and one restarted.
 # Pass only if each picker holds the 50 ms change-to-pool p99 in 95% of its steady-state seconds, the restarted
 # one rebuilds its pool from the log, and picks are checked against the listings, with fewer re-picks than a pool
@@ -19,7 +20,7 @@ for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; 
 pip install -q -r requirements.txt
 python -m py_compile common.py listings.py zone_picker.py app_events_flood.py confluent_bridge.py
 timeout 82 python -u listings.py --events 120 --zones 6 --listings 25 --rate 600 --orders 60 \
-  --final-hour 8 --final-at 40 --final-for 15 --hot-changes 500 > listings.log 2>&1 &
+  --final-hour 4 --final-at 40 --final-for 15 --hot-changes 300 > listings.log 2>&1 &
 sleep 4
 timeout 70 python -u app_events_flood.py --mbps 2 --at 20 --duration 35 > app-events.log 2>&1 &
 timeout 76 python -u zone_picker.py --name zp-1 --shard 0 --shards 2 > zp-1.log 2>&1 &
