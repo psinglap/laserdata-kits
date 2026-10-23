@@ -17,9 +17,8 @@ LaserData builds and runs, and ClickHouse 25.8.
 - **Its exactly-once mode is documented precisely:** a high-water mark per partition, pending offset ranges, and
   replayed blocks that reuse deterministic deduplication tokens, so ClickHouse drops a block it has already
   written, within the table's dedup window (Kafka ClickPipes best practices, 2026).
-- **Iggy users already write their own pipe into ClickHouse.** Apache Iggy's Powered By page lists Measure, whose
-  ingestion "grew 8x while reducing compute costs by 80%" on Iggy; Measure's open-source ingest worker reads Iggy with
-  manual offset commits, checks every batch for "already seen", and inserts into ClickHouse (measure-sh/measure).
+- **Iggy users already write their own pipe into ClickHouse.** Production Apache Iggy users (see Apache Iggy's
+  Powered By page) read Iggy with manual offset commits and an "already seen" check before each ClickHouse insert.
 - **Iggy's own 0.9 ClickHouse sink isn't exactly-once.** Its docs say the runtime "doesn't replay failed sink
   batches, so end-to-end at-least-once delivery isn't guaranteed", and retries resend a batch "without an
   `insert_deduplication_token`".
