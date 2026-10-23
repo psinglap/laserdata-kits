@@ -114,10 +114,9 @@ async def main(a):
             left[k][g] = left[k].get(g, 0) - len(ps)
             if left[k][g] == 0:
                 done[k][g] = now
-            m = msg(k=k, g=g, p=ps)
-            items.append((k, SendMessage(m)))
+            items.append((k, SendMessage(msg(k=k, g=g, p=ps))))
             if r.random() < a.dup_rate:
-                repeat_next.append((k, m))
+                repeat_next.append((k, g, ps))     # the same tally again next tick, as a retry would send it
         stats["tallies"] += len(items)
         return items
 
@@ -130,7 +129,8 @@ async def main(a):
             due = time.monotonic()
             while True:
                 now = time.time()
-                items = [(k, SendMessage(m)) for k, m in repeat_next]   # tallies written a second time
+                # Tallies written a second time, stamped when re-sent: a retry is a new send on the lane.
+                items = [(k, SendMessage(msg(k=k, g=g, p=ps, rep=1))) for k, g, ps in repeat_next]
                 stats["repeats"] += len(repeat_next)
                 repeat_next.clear()
                 if now >= next_gen:
