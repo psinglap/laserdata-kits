@@ -67,7 +67,24 @@ They print a line a second:
 To run the building and AWS on two brokers, start a second Apache Iggy and pass its address to `uplink.py` and
 `cloud_ledger.py` with `--cloud-url`.
 
-CI_RESULTS_PLACEHOLDER
+**What the numbers mean.** The kit times each carton event from the moment `fc_floor.py` sends it to the moment
+`site_state.py` has applied it to the floor view, through Python clients, on whatever machine you run it on. On a
+shared 2-vCPU CI runner, with the broker and all scripts on one box (the building's broker and the AWS broker
+are one broker there, two streams), at 120 new cartons a second (2x for ten seconds, about 740 carton events a
+second), 1% of events sent twice, 3 MB/s of control-system telemetry next door and the link to AWS cut for 15 s,
+three green runs held:
+
+- scan-to-floor-view p50 2.7–4.5 ms, p99 5.1–8.3 ms, p99.9 5.8–9.9 ms; 55–56 of 56 steady-state seconds inside
+  the 50 ms budget (one second in one run reached 60 ms);
+- floor view p99 while the link was down 5.0–7.8 ms (median per second), no higher than just before it during
+  the 2x peak (5.4–8.9 ms);
+- 13,684–14,163 carton events (15.4 s of the floor) held in the building's log and drained to AWS in 2.7 s;
+- AWS equal to the building at the end: 9,103–9,107 cartons, 7,906–7,919 ship-confirms, every history complete
+  and in order, zero gaps, 506–538 handheld retries absorbed;
+- live events into the AWS ledger at p99 32–40 ms, through the uplink's 20 ms send interval.
+
+The link outage is simulated in the uplink; a real WAN and a second broker add their own latency. The broker's
+own tail latency is measured separately with `iggy-bench` on dedicated machines (`bench/PLAN.md`).
 
 ## Shadow your own traffic
 
