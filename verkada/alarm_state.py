@@ -1,8 +1,11 @@
 """The alarm state service for camera partitions, fed by the camera partition lane.
 
 Reads every partition of camera-partition-events directly, on --readers connections of its own, tracking its own
-position and storing it on the broker at most once a second (no consumer group: a group reader visits one
-partition per poll, so an event waits for its partition's turn). Each record is one event for one alarm
+position (no consumer group: a group reader visits one partition per poll, so an event waits for its partition's
+turn). On start it replays the lane from the first event, so a restarted service rebuilds every partition's armed
+state and running countdowns from the log before it reports live latency; alarms that fell due during the replay
+are still raised if they are younger than --replay-alert-s. With long retention you would add a periodic state
+snapshot to replay from; the kit does not include one. Each record is one event for one alarm
 partition, with that partition's event sequence: a camera detection, an arm, a disarm, or a panic press.
 
 Per alarm partition it keeps: armed or not, and the running entry-delay countdown, if any.
@@ -92,12 +95,13 @@ async def main(a):
                     stats["started"] += 1
         elif kind == DISARM:
             if s.due:
-                if now >= s.due:            # the countdown ran out before this disarm was applied
+                t = now if caught_up[0] else d["ns"]    # while replaying, judge by the disarm's own time
+                if t >= s.due:              # the countdown ran out before this disarm was applied
                     stats["late_disarms"] += 1
                     raise_alarm(k, s, INTRUSION, s.cause, s.due, s.src, now)
                 else:
                     stats["cancelled"] += 1
-                    stats["min_left"] = min(stats.get("min_left", 1e9), (s.due - now) / 1e6)
+                    stats["min_left"] = min(stats.get("min_left", 1e9), (s.due - t) / 1e6)
                     running[0] -= 1
             s.armed, s.due, s.open = 0, 0, 0
         elif kind == ARM:
@@ -109,6 +113,9 @@ async def main(a):
     async def countdowns():
         # Raise every entry delay that has run out. Checked every 2 ms, from the due time, not from a poll.
         while True:
+            if not caught_up[0]:            # replaying: a disarm for this countdown may not have been read yet
+                await asyncio.sleep(0.002)
+                continue
             now = time.time_ns()
             while timers and timers[0][0] <= now:
                 due, k, cause = heapq.heappop(timers)
@@ -118,23 +125,19 @@ async def main(a):
             await asyncio.sleep(0.002)
 
     async def read(pids):
-        # Each partition in turn. Resume from the broker's stored offset once, then read on from our own
-        # position, storing the offset at most once a second: an offset write on every poll stalls the lane.
-        # A full batch means more is waiting, so no pause.
+        # Each partition in turn, from the first event (the state is rebuilt from the log), then on from our own
+        # position; nothing is stored on the broker per poll. A full batch means more is waiting, so no pause.
         c = await own_client()
         who = {p: Consumer.Single(f"{a.name}-p{p}") for p in pids}
-        nxt, committed = {}, {}
+        nxt = {}
         while True:
             more = False
             for p in pids:
-                commit = time.monotonic() - committed.get(p, 0) >= a.commit_s
                 ms = await c.poll_messages(STREAM, EVENTS, consumer=who[p], partition_id=p, count=a.batch,
-                                           auto_commit=commit,
+                                           auto_commit=False,
                                            polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
-                                           else PollingStrategy.Next())
+                                           else PollingStrategy.First())
                 if ms:
-                    if commit:
-                        committed[p] = time.monotonic()
                     nxt[p] = ms[-1].offset() + 1
                     now = time.time_ns()
                     for m in ms:
@@ -193,7 +196,6 @@ if __name__ == "__main__":
     p.add_argument("--readers", type=int, default=2, help="connections reading the camera-partition-events partitions")
     p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
     p.add_argument("--batch", type=int, default=5000)
-    p.add_argument("--commit-s", type=float, default=1, help="store each partition's offset at most this often")
     p.add_argument("--replay-alert-s", type=float, default=30,
                    help="after a restart, still raise alarms that fell due less than this long ago")
     asyncio.run(main(p.parse_args()))
