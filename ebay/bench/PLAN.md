@@ -9,7 +9,7 @@ Rules are fixed before any result exists. If Kafka wins a step, that row is publ
 
 | Parameter | Value | Why |
 |---|---|---|
-| Message size | ~150 B unicast notification · ~140 B window task · ~200 B retry record | Topic, subscription or (event, window), sequence, timestamp. |
+| Message size | ~150 B unicast notification · ~110 B window task · ~200 B retry record | Topic, subscription or (event, window), sequence, timestamp. |
 | Rate | 3K → 10K → 30K unicast/s, with a broadcast every 5 s → every 1 s | eBay has not published ESP volumes; the steps bracket a busy notification platform. |
 | Broadcast | 20,000 subscriptions in windows of 200 → 100,000 in windows of 200 | eBay's post: 20,000 subscribers, window size 200. The upper step asks what happens as the topic grows. |
 | Partitions | 16 unicast (keyed by subscription) · 16 windows (window % 16) · 8 retry | Task affinity as eBay's post describes it; per-subscription order. |
