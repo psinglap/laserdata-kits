@@ -34,6 +34,8 @@ async def main(a):
     await ensure_topic(src, LANE, PARTITIONS)                  # the sportsbook may not have created it yet
     await ensure_topic(dst, LANE, PARTITIONS)
     await ensure_topic(dst, STATUS, 1)
+    # Connect every copier first, so the heads read below are taken the moment before copying starts.
+    links = [(await connect(a.source_url), await connect(a.target_url)) for _ in range(PARTITIONS)]
     start = await heads(dst)                                   # nj-2 already holds offsets 0 .. start-1
     waiting = await heads(src)                                 # what nj-1 accepted while no mirror ran
     await dst.send_messages(STREAM, STATUS, 0, [SendMessage(json.dumps(
@@ -46,7 +48,7 @@ async def main(a):
     copied_to = list(start)
 
     async def copy(pid):
-        r, w = await connect(a.source_url), await connect(a.target_url)
+        r, w = links[pid]
         me, nxt = Consumer.Single(f"mirror-{a.target}-{pid}"), start[pid]
         while True:
             ms = await r.poll_messages(STREAM, LANE, consumer=me, partition_id=pid, count=a.batch, auto_commit=False,

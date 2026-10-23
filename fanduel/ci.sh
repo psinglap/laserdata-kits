@@ -60,7 +60,7 @@ for f in replica-1.log replica-2.log replica-2-restart.log; do
   echo "$f worst gaps: ${g:-none}, repeats: ${r:-none}"
   if ! ( [ "${g:-1}" = "0" ] && [ "${r:-1}" = "0" ] ); then status=1; fi
 done
-bad=$(grep -hE 'offset drift [1-9]|cross-state refused [1-9]' mirror-*.log | wc -l)
+bad=$(awk '/offset drift [1-9]|cross-state refused [1-9]/{n++} END{print n+0}' mirror-1.log mirror-2.log)
 echo "mirror seconds with offset drift or a cross-state refusal: $bad"
 [ "$bad" -eq 0 ] || status=1
 [ "$fo" -eq 0 ] || { echo "failover check failed"; status=1; }

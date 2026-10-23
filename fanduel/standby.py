@@ -83,9 +83,13 @@ async def main(a):
                 head.add(pid)                               # this partition's replay reached the head of the log
                 if len(head) == PARTITIONS:
                     caught[0] = time.monotonic()
-                    print(f"[{a.name}] rebuilt from {SECOND}'s log in {caught[0] - started:.2f}s: balance and open bets "
-                          f"of {len(wallet):,} accounts, {st['rebuilt']:,} events replayed; without the log this "
-                          f"replica would start empty and copy every wallet from {PRIMARY}", flush=True)
+                    if not st["rebuilt"]:
+                        print(f"[{a.name}] started on an empty lane at {SECOND}; timing every event from the first",
+                              flush=True)
+                    else:
+                        print(f"[{a.name}] rebuilt from {SECOND}'s log in {caught[0] - started:.2f}s: balance and open bets "
+                              f"of {len(wallet):,} accounts, {st['rebuilt']:,} events replayed; without the log "
+                              f"this replica would start empty and copy every wallet from {PRIMARY}", flush=True)
             await asyncio.sleep(a.poll_ms / 1000)
 
     async def status():
