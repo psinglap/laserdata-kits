@@ -41,6 +41,7 @@ async def main(a):
     lat, st, run = Window(), defaultdict(int), defaultdict(int)
     requery_seen = set()
     caught = [None]
+    settled = [False]                       # caught up: a whole second with every live change inside the budget
 
     def apply(e):
         if e.get("type") == "requeryRequired":
@@ -122,8 +123,15 @@ async def main(a):
                 lat.flush()
                 continue
             r = lat.flush()
-            ok = "idle" if not r["n"] else "PASS" if r["p99"] < a.budget_ms else "FAIL"
             run["breaks"] += st["breaks"]
+            if not settled[0]:
+                # Changes made while the mirror was rebuilding arrive late by design; not live latency.
+                settled[0] = bool(r["n"]) and r["max"] < a.budget_ms
+                print(f"[{a.name}] catching up with changes made during the rebuild: {r['n']:,} applied, "
+                      f"max {r['max']:.0f}ms  chains broken {st['breaks']:,} (total {run['breaks']:,})", flush=True)
+                st.clear()
+                continue
+            ok = "idle" if not r["n"] else "PASS" if r["p99"] < a.budget_ms else "FAIL"
             print(f"[{a.name}] {r['n']:>6,} changes/s  change-to-mirror p50 {r['p50']:5.1f}ms  p99 {r['p99']:5.1f}ms  "
                   f"p99.9 {r['p999']:5.1f}ms  {ok} (<{a.budget_ms:g}ms)  repeats dropped {st['dup']:,}  "
                   f"removes {st['removes']:,}  chains broken {st['breaks']:,} (total {run['breaks']:,})  "
