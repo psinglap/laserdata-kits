@@ -9,7 +9,7 @@ value as `body`, the Kafka record timestamp as `ns`, and a per-key `seq`. A tomb
     python index_app.py --topic shadow-events --table shadow_context
     python context_check.py --topic shadow-events --table shadow_context
 
-prints Kafka-produce-to-LanceDB freshness for the Iggy path, next to the Kafka path you run today.
+prints Kafka-produce-to-Postgres freshness for the Iggy path, next to the Kafka path you run today.
 
 Needs: pip install confluent-kafka apache-iggy==0.9.0
 Pass client settings with -X, for example: -X security.protocol=SASL_SSL -X sasl.mechanisms=PLAIN

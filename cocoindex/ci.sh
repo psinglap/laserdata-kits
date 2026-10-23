@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
-# CI smoke test: Apache Iggy 0.9.0 and CocoIndex 1.0.26 (its own Iggy connector) into an embedded LanceDB table.
+# CI smoke test: Apache Iggy 0.9.0 and CocoIndex 1.0.26 (its own Iggy connector) into Postgres.
 # The review service writes thread changes into Iggy for about 85 s (with a 2x spike), and the CocoIndex app keeps
 # the review_context table current. The app is killed with SIGKILL mid-run and restarted 5 s later. Pass only if
 # change-to-index freshness stays inside 1 s in 95% of steady-state seconds, the crash happened and the restarted app
-# replayed the changes held in Iggy, agent lookups were measured, and at the end every thread in LanceDB matches the
+# replayed the changes held in Iggy, agent lookups were measured, and at the end every thread in Postgres matches the
 # topic (no missing, stale, resolved-but-still-indexed or extra row).
 set -euo pipefail
 cd "$(dirname "$0")"
-trap 'docker compose logs --tail 30 iggy || true' ERR
+trap 'docker compose logs --tail 30 iggy postgres || true' ERR
 # Flush the broker's writes to disk continuously, as a streaming host is tuned, instead of Linux's default of
 # holding up to 30 s of dirty pages and writing them in one burst, which stalled every reader on the runner for
 # 0.2-0.8 s at once; it is the runner's disk, not the lane.
 sudo sysctl -q -w vm.dirty_background_bytes=33554432 vm.dirty_expire_centisecs=200 vm.dirty_writeback_centisecs=100 || true
 docker compose up -d
 for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; sleep 1; done
+for _ in $(seq 1 60); do docker compose exec -T postgres pg_isready -q -U cocoindex && break; sleep 1; done
 pip install -q -r requirements.txt
 python -m py_compile common.py review_events.py index_app.py context_check.py kafka_shadow.py
-rm -rf lancedb_data cocoindex_state .index-heartbeat
+rm -rf cocoindex_state .index-heartbeat
 
 # 5,000 open review threads, 250 changes/s for 85 s, 2x for 8 s from 20 s.
 timeout 100 python -u review_events.py --threads 5000 --rate 250 --duration 85 --spike-x 2 --spike-at 20 --spike-for 8 \

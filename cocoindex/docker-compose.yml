@@ -13,3 +13,13 @@ services:
       - IGGY_HTTP_ADDRESS=0.0.0.0:3000
       - IGGY_NODE_ADVERTISED_ADDRESS=localhost
     ports: ["8090:8090", "3000:3000"]
+
+  # The target CocoIndex's own examples use: Postgres with pgvector. Point --pg-url at your own instead.
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=cocoindex
+      - POSTGRES_PASSWORD=cocoindex
+      - POSTGRES_DB=cocoindex
+    ports: ["5432:5432"]

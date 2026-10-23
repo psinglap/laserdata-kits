@@ -1,8 +1,8 @@
-"""What an agent would see: is the LanceDB review context as current as the Iggy topic?
+"""What an agent would see: is the Postgres review context as current as the Iggy topic?
 
-It reads the topic itself (direct partition reads, the ground truth) and the LanceDB table every 50 ms, and prints a
+It reads the topic itself (direct partition reads, the ground truth) and the Postgres table every 50 ms, and prints a
 line a second:
-- change-to-index freshness: from the review service writing a change to Iggy to the row being readable in LanceDB
+- change-to-index freshness: from the review service writing a change to Iggy to the row being readable in Postgres
   (a resolved thread: its row gone), p50/p99/p99.9, PASS/FAIL against --budget-ms;
 - stale answers: --lookups random thread lookups a second, as an agent would make, and how many returned an older
   version of the thread (or a resolved one) than the topic held at that moment; next to it, the same lookups answered
@@ -21,10 +21,10 @@ import json
 import random
 import time
 
-import lancedb as ldb
+import asyncpg
 from apache_iggy import Consumer, IggyClient, PollingStrategy
 
-from common import DEFAULT_URL, EVENTS, LANCEDB_URI, STREAM, TABLE, Window, heartbeat_age
+from common import DEFAULT_URL, EVENTS, PG_URL, STREAM, TABLE, Window, heartbeat_age
 
 
 async def main(a):
@@ -73,17 +73,13 @@ async def main(a):
                 caught_up_topic.set()
 
     async def open_table():
-        db = await ldb.connect_async(LANCEDB_URI)
-        while True:
-            try:
-                return await db.open_table(a.table)
-            except Exception:
-                await asyncio.sleep(0.2)
+        conn = await asyncpg.connect(a.pg_url)
+        while not await conn.fetchval("SELECT to_regclass($1)", a.table):   # CocoIndex creates it on start
+            await asyncio.sleep(0.2)
+        return conn
 
-    async def read_index(tb):
-        await tb.checkout_latest()
-        at = await tb.query().select(["thread_id", "seq"]).to_arrow()
-        return dict(zip(at["thread_id"].to_pylist(), at["seq"].to_pylist()))
+    async def read_index(conn):
+        return dict(await conn.fetch(f'SELECT thread_id, seq FROM "{a.table}"'))
 
     asyncio.create_task(read_truth())
     await caught_up_topic.wait()
@@ -173,7 +169,7 @@ async def main(a):
             break
     open_n = sum(1 for s, d in truth.values() if not d)
     print(f"[verify] threads on the topic {len(truth):,} (open {open_n:,}, resolved {len(truth) - open_n:,})  rows in "
-          f"LanceDB {len(idx):,}  missing {missing}  stale {stale}  resolved but still indexed {zombie}  extra {extra}",
+          f"Postgres {len(idx):,}  missing {missing}  stale {stale}  resolved but still indexed {zombie}  extra {extra}",
           flush=True)
     print("[verify] OK" if not bad else "[verify] MISMATCH", flush=True)
 
@@ -181,6 +177,7 @@ async def main(a):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--url", default=DEFAULT_URL)
+    p.add_argument("--pg-url", default=PG_URL)
     p.add_argument("--topic", default=EVENTS)
     p.add_argument("--table", default=TABLE)
     p.add_argument("--budget-ms", type=float, default=1000, help="change-to-index freshness budget")

@@ -1,5 +1,5 @@
 """Shared settings for the Apache Iggy live-context kit for CocoIndex: pull-request review threads change on an Iggy
-topic, and a CocoIndex app keeps a LanceDB table of every open thread current, through CocoIndex's own Iggy connector
+topic, and a CocoIndex app keeps a Postgres table of every open thread current, through CocoIndex's own Iggy connector
 (`cocoindex.connectors.iggy.topic_as_map`).
 
 Every message carries the thread's whole current state and a per-thread `seq`, never a delta, so a replayed message
@@ -22,7 +22,7 @@ SHADOW = "shadow-events"        # what kafka_shadow.py writes: a Kafka topic you
 PARTITIONS = 1
 RETENTION = IggyExpiry.ExpireDuration(timedelta(days=7))   # a rebuilt index replays the last week from Iggy
 DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: small writes go out at once
-LANCEDB_URI = os.environ.get("LANCEDB_URI", "./lancedb_data")
+PG_URL = os.environ.get("POSTGRES_URL", "postgres://cocoindex:cocoindex@127.0.0.1:5432/cocoindex")
 TABLE = "review_context"
 HEARTBEAT = ".index-heartbeat"  # index_app.py touches it every 100 ms; context_check.py uses it to see a crash
 
