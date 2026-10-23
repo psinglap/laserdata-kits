@@ -50,10 +50,12 @@ async def main(a):
     timers = []                             # (due ns, alarm partition, cause seq): running entry delays
     pending = []                            # alarms waiting for the next send (one batch every 2 ms)
     caught_up = [False]                     # a new reader first replays events from before it joined
+    running = [0]                           # entry delays counting down now
     gc.freeze()                             # keep start-up objects out of the collector's way
 
     def raise_alarm(k, s, kind, cause, due_ns, src_ns, now):
         stats[kind] += 1
+        running[0] -= bool(s.due)
         s.open, s.due = 1, 0                # one alarm per incident; the next arm or disarm closes it
         if now - due_ns > a.replay_alert_s * 1e9:
             return                          # replayed from long ago: state rebuilt, nobody needs this alarm now
@@ -86,6 +88,7 @@ async def main(a):
                 else:
                     s.due, s.cause, s.src = d["ns"] + int(d["delay_s"] * 1e9), d["seq"], d["ns"]
                     heapq.heappush(timers, (s.due, k, s.cause))
+                    running[0] += 1
                     stats["started"] += 1
         elif kind == DISARM:
             if s.due:
@@ -95,8 +98,10 @@ async def main(a):
                 else:
                     stats["cancelled"] += 1
                     stats["min_left"] = min(stats.get("min_left", 1e9), (s.due - now) / 1e6)
+                    running[0] -= 1
             s.armed, s.due, s.open = 0, 0, 0
         elif kind == ARM:
+            running[0] -= bool(s.due)
             s.armed, s.due, s.open = 1, 0, 0
         elif kind == PANIC:
             raise_alarm(k, s, SILENT, d["seq"], d["ns"], d["ns"], now)
@@ -170,7 +175,7 @@ async def main(a):
                   f"entry delays started {int(stats['started']):,}, cancelled by a disarm {int(stats['cancelled']):,} "
                   f"(closest {left} before running out), disarms applied after the delay ran out "
                   f"{int(stats['late_disarms']):,}  alarms sent {int(stats['sent']):,} (intrusion "
-                  f"{int(stats[INTRUSION]):,}, panic {int(stats[SILENT]):,})  countdowns running {len(timers):,}  "
+                  f"{int(stats[INTRUSION]):,}, panic {int(stats[SILENT]):,})  countdowns running {running[0]:,}  "
                   f"{stalls.read()}  slowest event->broker {stats['to_broker']:.0f} ms, broker->state "
                   f"{stats['from_broker']:.0f} ms", flush=True)
             stats.clear()
