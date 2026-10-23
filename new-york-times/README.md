@@ -9,6 +9,7 @@ This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy
 engine LaserData builds and runs.
 
 - **Write-up:** (link added when published)
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.new-york-times-kit
 - **One slide:** [`LaserData_NewYorkTimes_PublishToSite.pdf`](LaserData_NewYorkTimes_PublishToSite.pdf)
 
 ## Why this use case
