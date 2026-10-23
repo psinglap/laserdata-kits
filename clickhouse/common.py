@@ -107,12 +107,12 @@ class ClickHouse:
     def query(self, sql: str) -> str:
         return self._post({}, sql.encode())[0].decode()
 
-    def insert(self, table: str, rows: bytes, token: str) -> int:
-        """Insert one block of JSONEachRow rows; returns the rows ClickHouse wrote (0 when it dropped a repeat)."""
-        _, summary = self._post({"query": f"INSERT INTO {table} FORMAT JSONEachRow",
+    def insert(self, table: str, rows: bytes, token: str) -> None:
+        """Insert one block of JSONEachRow rows. A repeat of a block whose token ClickHouse has seen is dropped
+        (the summary header still reports the rows, so the pipe checks offsets in the table instead)."""
+        self._post({"query": f"INSERT INTO {table} FORMAT JSONEachRow",
                                  "insert_deduplicate": 1, "insert_deduplication_token": token,
                                  "wait_end_of_query": 1}, rows)
-        return int(json.loads(summary or "{}").get("written_rows", -1))
 
 
 async def ensure_topics(client, *topics):

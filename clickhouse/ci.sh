@@ -73,9 +73,20 @@ print("ClickHouse outage: up to %d events held in Iggy" % max(held or [0]))
 catch = [l for l in log if "catching up" in l]
 print("catching-up seconds %d (start, outage, restart); oldest held event %.1f s" % (
     len(catch), max(nums(r"oldest ([0-9.]+) s", catch) or [0])))
-tot = [l for l in log if "totals:" in l][-1]
-f = {k: float(v.replace(",", "")) for k, v in re.findall(
-    r"(inserted|repeats|twice|retries|restart|outage) ([0-9.,]+)", tot)}
+# The pipe is killed and restarted mid-run, so add up the last totals line of each process.
+runs, cur = [], []
+for l in log:
+    if "restored from" in l or "no pipe-state" in l:
+        runs.append(cur)
+        cur = []
+    cur.append(l)
+runs.append(cur)
+f = {}
+for run in runs:
+    t = [l for l in run if "totals:" in l]
+    if t:
+        for k, v in re.findall(r"(inserted|repeats|twice|retries|restart|outage) ([0-9.,]+)", t[-1]):
+            f[k] = f.get(k, 0) + float(v.replace(",", ""))
 print("totals: inserted %d  dropped by ClickHouse as repeats %d  written twice %d  insert retries %d  "
       "replayed on restart %d  outage %.1f s" % (f["inserted"], f["repeats"], f["twice"], f["retries"], f["restart"], f["outage"]))
 r = [l for l in log if "re-inserted the block in flight" in l]

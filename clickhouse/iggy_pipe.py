@@ -68,17 +68,17 @@ async def main(a):
         return await client.poll_messages(STREAM, LOGS, consumer=readers[p], partition_id=p, count=count,
                                           auto_commit=False, polling_strategy=PollingStrategy.Offset(start))
 
-    async def insert(body: bytes, token: str, n: int) -> int:
+    async def insert(body: bytes, token: str, n: int):
         """Insert one block; on failure retry the same block with the same token until ClickHouse takes it."""
         while True:
             try:
-                written = await asyncio.to_thread(ch.insert, TABLE, body, token)
+                await asyncio.to_thread(ch.insert, TABLE, body, token)
                 if mode["down_since"] is not None:
                     tot["outage_s"] += time.monotonic() - mode["down_since"]
                     print(f"[pipe] ClickHouse is back after {time.monotonic() - mode['down_since']:.1f} s; "
                           f"block of {n:,} rows landed with its original token", flush=True)
                     mode["down_since"] = None
-                return written
+                return
             except Exception as e:
                 if mode["down_since"] is None:
                     mode["down_since"] = time.monotonic()
@@ -87,6 +87,15 @@ async def main(a):
                           f"token; collectors keep writing to Iggy", flush=True)
                 mode["catching"] = True
                 tot["retried"] += 1
+                await asyncio.sleep(a.retry_s)
+
+    async def rows_in(ranges: dict) -> int:
+        """Rows of these Iggy offset ranges that are in ClickHouse now (the pipe's own exactly-once check)."""
+        where = " OR ".join(f"(IggyPartition = {p} AND IggyOffset BETWEEN {f} AND {l})" for p, (f, l) in ranges.items())
+        while True:
+            try:
+                return int(await asyncio.to_thread(ch.query, f"SELECT count() FROM {TABLE} WHERE {where} FORMAT TSV"))
+            except Exception:
                 await asyncio.sleep(a.retry_s)
 
     async def record(pending: dict, token: str):
@@ -113,14 +122,18 @@ async def main(a):
                 got += ms
             batch[p] = got
         n = sum(len(v) for v in batch.values())
-        written = await insert(rows_of(batch), doc["token"], n) if n else 0
+        before = await rows_in(pending) if n else 0
+        if n:
+            await insert(rows_of(batch), doc["token"], n)
+        after = await rows_in(pending) if n else 0
         for p, (f, l) in pending.items():
             hwm[p] = l
         tot["replayed"] += n
-        tot["deduped"] += max(0, n - written)
+        tot["deduped"] += before
+        tot["leaked"] += max(0, after - n)
         print(f"[pipe] restored from {STATE}: high-water marks for {len(hwm)} partitions; re-inserted the block in "
-              f"flight ({n:,} rows) with its original token: ClickHouse wrote {max(written, 0):,} "
-              f"({'it had already landed' if written == 0 else 'it had not landed'})", flush=True)
+              f"flight ({n:,} rows) with its original token; it {'had already landed, so ClickHouse dropped the repeat' if before else 'had not landed'}: "
+              f"{after:,} of {n:,} rows in ClickHouse", flush=True)
     else:
         print(f"[pipe] no {STATE} yet: reading every partition from the first event", flush=True)
     nxt = {p: hwm[p] + 1 for p in parts}
@@ -140,12 +153,11 @@ async def main(a):
                 token = token_for(ranges)
                 await record({p: list(r) for p, r in ranges.items()}, token)
                 body = rows_of(batch)
-                written = await insert(body, token, n)
+                await insert(body, token, n)
                 ack = time.time_ns()
                 for p, (f, l) in ranges.items():
                     hwm[p], nxt[p] = l, l + 1
-                tot["inserted"] += max(written, 0)
-                tot["deduped"] += max(0, n - written) if written >= 0 else 0
+                tot["inserted"] += n
                 st["rows"] += n
                 st["inserts"] += 1
                 for ms in batch.values():
@@ -158,9 +170,10 @@ async def main(a):
                             lat.add(age)
                 blocks += 1
                 if a.repeat_every and blocks % a.repeat_every == 0:
-                    again = await insert(body, token, n)  # as if the first acknowledgement had been lost
-                    tot["deduped"] += n - max(again, 0)
-                    tot["leaked"] += max(again, 0)
+                    await insert(body, token, n)          # as if the first acknowledgement had been lost
+                    c = await rows_in(ranges)
+                    tot["deduped"] += n if c == n else 0
+                    tot["leaked"] += max(0, c - n)
             cycle += 1
             if full:
                 continue                              # a backlog: keep reading without waiting
