@@ -10,7 +10,9 @@ partition. No time window, no duplicates to filter.
 Three things happen to partners during a run:
   * Disconnects (--drops a minute per partner): the partner's connection drops and the last few events it was sent
     never arrive (lost in flight). It comes back --away seconds later with since_id = the last event it processed.
-    Events created while it was away are held in the log and counted apart, not as live latency.
+    Events created while it was away are held in the log; the partner reads them back in small batches and counts
+    as live again once it is back at the head of its log (the time from reconnect to that point is printed as
+    resume-to-live). Held events are counted apart, not as live latency.
   * A slow partner (--slow, from --slow-at for --slow-for seconds): it can only process --slow-frac of its event
     rate. Alpaca's SSE docs say the server then drops messages ("you are reading too slowly, dropped N messages").
     Here it falls behind in its own log, loses nothing, and catches up afterwards; other partners are unaffected.
@@ -36,7 +38,7 @@ from common import DEFAULT_URL, PARTS, STREAM, Window, connect, ensure_topics, l
 class Partner:
     def __init__(self, code, slow):
         self.code, self.slow = code, slow
-        self.state = "catching up"           # catching up -> up; away; slow -> draining -> up
+        self.state = "catching up"           # catching up -> up; up -> away -> draining -> up; slow -> draining -> up
         self.epoch = 0                       # bumped on every reconnect: a poll from before it is discarded
         self.nxt = {p: None for p in range(PARTS[code])}   # next offset to read per partition (None: from start)
         self.sent = deque(maxlen=200_000)    # delivery order: (event_id, partition, offset, account, seq)
@@ -87,17 +89,18 @@ async def main(a):
             if pt.state == "up" and r["ns"] >= pt.live_ns:
                 lat.add(age)
                 st["pushed"] += 1
-                if pt.t_back and age < a.budget_ms:
-                    resume_ms.add((time.monotonic() - pt.t_back) * 1e3)   # reconnect to first live event
-                    pt.t_back = 0.0
                 continue
             st["held"] += 1                    # read back from the log: after a reconnect, or a slow partner
             if pt.slow:
                 st["slow_read"] += 1
             if pt.state == "draining" and age < a.budget_ms:
-                pt.state, pt.live_ns = "up", now   # the slow partner is back at the head of its log
-                tot["slow_catchup_s"] = time.monotonic() - tot["slow_end"]
-                st["slow_caught_up"] = 1
+                # Back at the head of its log: from here on the partner's events count as live.
+                pt.state, pt.live_ns = "up", now
+                if pt.slow:
+                    tot["slow_catchup_s"] = time.monotonic() - tot["slow_end"]
+                    st["slow_caught_up"] = 1
+                else:
+                    resume_ms.add((time.monotonic() - pt.t_back) * 1e3)   # reconnect to back at the head
 
     async def read(pt, pid):
         c = await connect(a.url)
@@ -106,7 +109,9 @@ async def main(a):
             if pt.state == "away":
                 await asyncio.sleep(a.poll_ms / 1000)
                 continue
-            count = a.batch
+            # A partner reading back held events polls in small batches, so the loop serves every other partner
+            # in between.
+            count = a.batch if pt.state != "draining" else a.drain_batch
             if pt.state == "slow":
                 count = min(a.batch, int(pt.budget))
                 if count <= 0:
@@ -159,7 +164,7 @@ async def main(a):
         for pid, off in pt.rewind.items():
             if pid not in seen:
                 pt.nxt[pid] = off              # nothing from this partition reached the partner before since_id
-        pt.state, pt.live_ns, pt.t_back = "up", time.time_ns(), now
+        pt.state, pt.t_back = "draining", now  # reads back what it missed, then goes live
         pt.epoch += 1
         st["resumes"] += 1
 
@@ -283,4 +288,5 @@ if __name__ == "__main__":
     p.add_argument("--slow-rate", type=float, default=30, help="events per second the slow partner can process")
     p.add_argument("--poll-ms", type=float, default=1, help="wait between polls of a partition, unless the last read was a full batch")
     p.add_argument("--batch", type=int, default=2000)
+    p.add_argument("--drain-batch", type=int, default=100, help="poll size while a partner reads back held events")
     asyncio.run(main(p.parse_args()))
