@@ -51,12 +51,12 @@ already holds that fill. A slow or congested lane shows up there first.
 
 **What the numbers mean.** The kit times each position from the moment `oms_fills.py` creates the
 fill to the moment `holdings.py` has applied it, through Python clients, on whatever machine you run it
-on. On a shared GitHub runner, with the broker and three Python processes on one box, five green CI
-runs at 500 fills a second (2.5× for 15 s as the open) held p50 12.0 to 12.7 ms, p99 23.3 to 25.3 ms
-and p99.9 25.1 to 26.8 ms (median per second over 63 steady-state seconds each, no second over the
-100 ms budget). Through the open burst (1,250 fills a second) the median per-second p99 was 24.2 to
-33.9 ms, worst 46.4 ms. Of about 42,300 post-trade refreshes checked in each run, none missed the new
-fill. A 1 MB/s DataPlatform stream ran next door for 34 s. One earlier run at 1,000 fills a second
+on. On a shared GitHub runner, with the broker and three Python processes on one box, two green CI
+runs at 500 fills a second (2.5× for 15 s as the open), with Holdings reading every partition directly,
+held p50 6.7 ms, p99 12.6 to 12.7 ms and p99.9 13.6 to 13.8 ms (median per second over 62 to 63
+steady-state seconds each, no second over the 100 ms budget). Through the open burst (1,250 fills a
+second) the median per-second p99 was 15.2 to 15.3 ms, worst 15.8 ms. Of about 42,300 post-trade
+refreshes checked in each run, none missed the new fill. A 1 MB/s DataPlatform stream ran next door for 34 s. One earlier run at 1,000 fills a second
 with a 3× burst failed: during the burst the single Python process reading both the lane and the order updates took in
 about 1,800 position updates a second while 3,000 arrived, and fell seconds behind, so CI runs at the
 lower rate; on a laptop or a larger machine, raise the rates. That is the end-to-end lane through

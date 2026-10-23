@@ -57,13 +57,13 @@ per batch, taken before encoding) to the moment a worker has read it; a position
 position book writes it. Both go through Python clients, on whatever machine you run it on. On a shared 2-vCPU
 GitHub runner with the broker and all four scripts on one box (505 instruments, 40,000 open positions, 600
 position changes a second, a 5% crash over 15 s, two workers, 2 MB/s of trade export next door), the medians of
-the steady-state seconds over three green runs were lane p50 5.5–12.0 ms, p99 11.4–20.6 ms and p99.9
-16.3–31.4 ms on each worker; the worst single second had a p99 of 24.4–40.7 ms, and every steady-state second
+the steady-state seconds over five green runs were lane p50 5.5–12.0 ms, p99 11.4–20.6 ms and p99.9
+16.3–31.4 ms on each worker; the worst single second had a p99 of 24.4–41.3 ms, and every steady-state second
 (62–63 per worker per run) was inside the 50 ms budget. Each whole mark batch, cross-margin accounts included,
 was checked within 30–69 ms of arriving. About 7,000 liquidations were filled per run (4,900–5,300 of them in
-the 15 crash seconds, 2–5 on a position that had changed since the worker saw it). In that simulated crash, fills
-landed 60,800–65,500 USDT past liquidation prices and 6,800–8,200 USDT past bankruptcy prices; a worker running
-0.5 s behind would have filled the same orders 17–20% further past liquidation and 39–41% further past bankruptcy.
+the 15 crash seconds, 0–5 on a position that had changed since the worker saw it). In that simulated crash, fills
+landed 60,800–66,700 USDT past liquidation prices and 6,800–8,900 USDT past bankruptcy prices; a worker running
+0.5 s behind would have filled the same orders 17–20% further past liquidation and 39–44% further past bankruptcy.
 That is the end-to-end lane through this demo code, not the broker alone, and the USDT figures depend on the kit's
 price model, not CoinDCX's books. The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`,
 on dedicated machines.

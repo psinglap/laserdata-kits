@@ -45,8 +45,9 @@ Both print a line a second:
 **What the numbers mean.** The kit times each change from the moment `listings.py` creates it to the moment
 `event_pages.py` has applied it, through Python clients, on whatever machine you run it on. On a shared 2-vCPU
 GitHub runner with the broker and all three scripts on one box (1,500 changes/s, a 2× onsale to about 3,000/s,
-2 MB/s of clickstream next door), it held p50 11–12 ms and p99 22–24 ms over two green runs (21.5 ms in the onsale seconds), with no second over
-the 100 ms budget. Checkout rejected 0.8–0.9% of seat picks as already sold; a page fed 2 s behind would have
+2 MB/s of clickstream next door), with the page server reading every partition directly, it held p50 4.8–6.3 ms
+and p99 12.9–13.5 ms over two green runs (12.0–13.4 ms in the onsale seconds), with one second in 114 over the
+100 ms budget (a 104 ms runner blip). Checkout rejected 0.6–0.8% of seat picks as already sold; a page fed 2 s behind would have
 listed about 2–5% of its listings after they had sold out.
 That is the end-to-end lane through this demo code, not the broker alone. One Python reader tops out near
 5,000 changes/s on that runner; past it, latency climbs because the reader falls behind, not the broker. The

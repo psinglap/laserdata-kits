@@ -41,8 +41,9 @@ Both print a line a second:
 
 **What the numbers mean.** The kit times each change from the moment `hubs.py` creates it to the
 moment `revalidate.py` has applied it, through Python clients, on whatever machine you run it on.
-On a shared 2-vCPU CI runner with the broker and both scripts on one box, it holds about
-p50 12 ms and p99 24 ms at 2,000 changes/s. That is the end-to-end lane through this demo code, not
+On a shared 2-vCPU CI runner with the broker and both scripts on one box, with re-validation reading
+every partition directly, two runs held about p50 5 to 8 ms and p99 9 to 16 ms at 2,000 changes/s, with
+no failing second. That is the end-to-end lane through this demo code, not
 the broker alone. The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`,
 on dedicated machines.
 

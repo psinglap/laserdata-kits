@@ -64,14 +64,14 @@ Checkout). The lane cannot shorten the detection window; it keeps the pipe from 
 event to the moment `downtime.py` has applied it, and each signal from the moment the detector sends it to
 the moment `checkout.py` has applied it, through Python clients, on whatever machine you run it on. On a
 shared GitHub runner, with the broker and four Python processes on one box, two green CI runs at 500
-payments a second (2.5× for 15 s as the surge) held status-to-detector p50 12.5 to 13.0 ms, p99 25.1 to
-25.8 ms and p99.9 26.4 to 27.2 ms (median per second over 62 steady-state seconds each, worst second's p99
-27.2 ms, none over the 100 ms budget). Through the surge (1,250 payments a second) the median per-second
-p99 was 24.1 to 25.3 ms, worst 26.2 ms. Detector-to-Checkout ran at about 50 signals a second (each
-cohort's state every second, plus every change): p50 3.4 to 5.5 ms, p99 4.9 to 8.5 ms, worst second
-10.2 ms. In each run four injected downtimes reached Checkout 0.9 to 5.3 ms after the flag; of about
-36,000 checkouts per run, 1,140 to 1,223 had the degraded method hidden and none offered it after the
-flag. A 1 MB/s workflow-event stream ran next door for 34 s. That is the end-to-end lane through
+payments a second (2.5× for 15 s as the surge), both readers reading every partition directly, held
+status-to-detector p50 4.8 to 6.1 ms, p99 8.8 to 11.7 ms and p99.9 9.4 to 12.3 ms (median per second over
+62 steady-state seconds each, worst second's p99 17.1 ms, none over the 100 ms budget). Through the surge
+(1,250 payments a second) the median per-second p99 was 9.9 to 13.3 ms, worst 17.1 ms. Detector-to-Checkout
+ran at about 50 signals a second (each cohort's state every second, plus every change): p50 3.5 to 4.0 ms,
+p99 4.3 to 5.5 ms, worst second 6.7 ms. In each run four injected downtimes reached Checkout 0.8 to 2.9 ms
+after the flag; of about 36,000 checkouts per run, 1,169 to 1,181 had the degraded method hidden, and 0 to 2
+were offered it in the milliseconds between the flag and the signal arriving. A 1 MB/s workflow-event stream ran next door for 34 s. That is the end-to-end lane through
 this demo code, not the broker alone; the broker's own tail latency is measured with `iggy-bench` on
 dedicated machines (`bench/PLAN.md`). The kit's detection rule (success rate of the last 40 payments
 below 50%, checked every 100 ms) is deliberately simple, so its detection windows of 0.3 to 1.2 s say

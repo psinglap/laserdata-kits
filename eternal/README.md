@@ -58,10 +58,11 @@ Both print a line a second:
 **What the numbers mean.** The kit times each kitchen change from the moment `kitchens.py` creates
 it to the moment `fpt.py` has applied it to the feature view, through Python clients, on whatever
 machine you run it on. On a shared 2-vCPU CI runner with the broker and all scripts on one box, at
-about 880 kitchen events/s (300 checkouts/s, kitchen time 60× faster), two runs held p50 11.0–12.5 ms,
-p99 21.5–25.3 ms and p99.9 23.5–27.2 ms. While a 4.0 MB/s benchmark replay ran on the same broker
-and the same two vCPUs, the median per-second p99 held at 21.6–25.1 ms (21.7–25.4 ms before it). In a typical second, 0 or 1 of 300
-predictions (0–0.33%) was made on a stale kitchen view; the worst second was 4 of 300. That is
+about 880 kitchen events/s (300 checkouts/s, kitchen time 60× faster), with the feature view reading
+every partition directly, two runs held p50 2.8–6.9 ms, p99 5.5–13.3 ms and p99.9 6.3–15.0 ms. While a
+4.0 MB/s benchmark replay ran on the same broker and the same two vCPUs, the median per-second p99 was
+6.3–14.9 ms (5.0–12.6 ms before it). In a typical second, none of 300 predictions was made on a stale
+kitchen view; the worst second was 2 of 300 (0.67%). That is
 the end-to-end lane through this demo code, not the broker alone. The broker's own tail latency is
 measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
 
