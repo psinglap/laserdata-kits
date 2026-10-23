@@ -246,10 +246,21 @@ async def main(a):
             b = int(now // a.cycle_s)
             if b != cur_b:
                 into = (now - b * a.cycle_s) * 1000
+                late = cur_b is None        # joined mid-block (a start or a restart)
                 cur_b, cur = b, tasks[b % VARIANTS]
                 ptr = 0
-                while ptr < len(cur) and cur[ptr][0] <= into - 50:
-                    ptr += 1                # joined mid-block: run only what is still ahead
+                if late:
+                    # Starts already past are skipped. Stops already past are sent now, as a player that stopped
+                    # while its node was away reports it on reconnect, so no stream is left running in the view.
+                    past = [(b - 1, i, d) for _, k, i, d, _ in tasks[(b - 1) % VARIANTS] if k == "E"]
+                    while ptr < len(cur) and cur[ptr][0] <= into - 50:
+                        if cur[ptr][1] == "E":
+                            past.append((b, cur[ptr][2], cur[ptr][3]))
+                        ptr += 1
+                    for blk, i, d in past:
+                        for s in mine(i, d):
+                            if s.endswith(f".{blk}"):   # only the stream that stop was for
+                                emit(i, d, s, "stop", batches)
             into_ms = (now - b * a.cycle_s) * 1000
             while ptr < len(cur) and cur[ptr][0] <= into_ms:
                 _, kind, i, d, tag = cur[ptr]
