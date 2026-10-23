@@ -1,8 +1,9 @@
 """The story judge, fed by the story SLO lane.
 
-Reads every partition of story-events directly, on --readers connections of its own, tracking its own position and
-storing it on the broker at most once a second (no consumer group: a group reader visits one partition per poll,
-so an event can wait for its partition's turn). Each record is one event of one story: the trigger (a user taps a
+Reads every partition of story-events directly, on --readers connections of its own, tracking its own position
+(no consumer group: a group reader visits one partition per poll, so an event can wait for its partition's turn).
+On start it reads from --lookback-s before now (by the broker's timestamps), longer than a deadline, so after a
+restart every story still open is rebuilt from the log before any deadline is judged. Each record is one event of one story: the trigger (a user taps a
 livestream tile), a step (the server authorizes the join), an outcome (video playing, auction shown, chat visible)
 or an expected-failure role (the seller blocked this user). Every record carries the story key, the story type,
 the role, the client and its surface (ios, android, web).
@@ -181,23 +182,19 @@ async def main(a):
                 verdict(key, s, True, None, d["ns"], now)
 
     async def read(pids):
-        # Each partition in turn. Resume from the broker's stored offset once (from the start of the log the
-        # first time), then read on from our own position, storing the offset at most once a second: an offset
-        # write on every poll stalls the lane. A full batch means more is waiting, so no pause.
+        # Each partition in turn: first from the lookback point by timestamp, then on from our own position, with
+        # nothing stored on the broker per poll. A full batch means more is waiting, so no pause.
         c = await own_client()
         who = {p: Consumer.Single(f"{a.name}-p{p}") for p in pids}
-        nxt, committed = {}, {}
+        since = PollingStrategy.Timestamp(int((time.time() - a.lookback_s) * 1e6))   # broker time, microseconds
+        nxt = {}
         while True:
             more = False
             for p in pids:
-                commit = time.monotonic() - committed.get(p, 0) >= a.commit_s
                 ms = await c.poll_messages(STREAM, STORY_EVENTS, consumer=who[p], partition_id=p, count=a.batch,
-                                           auto_commit=commit,
-                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt
-                                           else PollingStrategy.Next())
+                                           auto_commit=False,
+                                           polling_strategy=PollingStrategy.Offset(nxt[p]) if p in nxt else since)
                 if ms:
-                    if commit:
-                        committed[p] = time.monotonic()
                     nxt[p] = ms[-1].offset() + 1
                     now = time.time_ns()
                     for m in ms:
@@ -305,7 +302,8 @@ if __name__ == "__main__":
     p.add_argument("--readers", type=int, default=2, help="connections reading the story-events partitions")
     p.add_argument("--poll-ms", type=float, default=1, help="wait between rounds when nothing more is waiting")
     p.add_argument("--batch", type=int, default=5000)
-    p.add_argument("--commit-s", type=float, default=1, help="store each partition's offset at most this often")
+    p.add_argument("--lookback-s", type=float, default=0,
+                   help="on start, read from this long ago (default: the deadline plus 15 s)")
     p.add_argument("--deadline-s", type=float, default=60, help="a story fails if an outcome is missing this long "
                                                                 "after its trigger")
     p.add_argument("--grace-ms", type=float, default=200, help="wait past a deadline for events already in flight")
@@ -316,4 +314,6 @@ if __name__ == "__main__":
     p.add_argument("--clear-sli", type=float, default=0.985, help="SLI at or above which it clears")
     p.add_argument("--replay-alert-s", type=float, default=30,
                    help="after a restart, still send alerts for verdicts younger than this")
-    asyncio.run(main(p.parse_args()))
+    args = p.parse_args()
+    args.lookback_s = args.lookback_s or args.deadline_s + 15
+    asyncio.run(main(args))
