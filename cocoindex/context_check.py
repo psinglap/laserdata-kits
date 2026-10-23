@@ -132,7 +132,10 @@ async def main(a):
             ok = w["p99"] <= a.budget_ms and overdue == 0
             sl = "stale answers %.1f%% (snapshot from %ds ago: %.1f%%)" % (
                 100 * stale_live / max(1, looked), time.monotonic() - session_t, 100 * stale_snap / max(1, looked))
-            if offline_s or catching_up and not (ok and w["n"]):
+            # Caught up only after a whole second in which every change was inside the budget: one fresh change is
+            # not enough, the replayed backlog lands in the same seconds.
+            clean = w["n"] and w["max"] <= a.budget_ms and overdue == 0
+            if offline_s or catching_up and not clean:
                 catching_up = True
                 oldest = (now - held["oldest"]) / 1e9 if held["oldest"] and pending else 0
                 print(f"[check] catching up: {w['n']:>5,} changes indexed  {sum(map(len, pending.values())):,} not yet "
