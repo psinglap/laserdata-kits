@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # CI smoke test: start Apache Iggy 0.9.0 and run the key-play alerts lane at small scale for about a minute:
-# 80 live games (game time 60x real time, about 250 moments a second, clips ready 1-4 s after each key play, a
-# half of home runs reviewed 0.5-4 s after the play, so some reviews end before the clip and some after), Game
-# Alerts reading the lane, player viewing events next door with a 4x first-pitch surge, and Game Alerts restarted
+# 80 live games (game time 60x real time, about 250 moments a second, clips ready 1-4 s after each key play, half
+# of home runs reviewed 0.5-4 s after the play, so some reviews end before the clip and some after), Game Alerts
+# reading the lane, player viewing events next door with a 4x first-pitch surge, and Game Alerts restarted
 # mid-game.
 # Pass only if Game Alerts holds its 50 ms clip-to-alert p99 budget in 95% of its steady-state seconds with alerts,
 # sees no gaps, holds back alerts whose call was overturned before the clip was ready, corrects ones overturned
