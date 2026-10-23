@@ -67,8 +67,8 @@ about 340 lane changes a second. Every steady-state second passed the 50 ms budg
 in all three runs); the worst second reached 42.8–47.4 ms. Bid-to-core was p50 5.2–6.7 ms and p99 9.5–12.0 ms;
 bid-to-flag, a round trip through the core, p50 11.1–15.6 ms and p99 16.8–24.9 ms. The restarted edge rebuilt all
 120 lanes from the log (about 9,700 changes) in 0.05–0.09 s before it took a bid. Of 21,408–22,143 live bids judged
-after warm-up, 3.7–4.5% were outbid on arrival: another member's bid of the same amount reached the core first, in
-the milliseconds both were in flight; none landed after the hammer. The same bids placed from a screen refreshed
+after warm-up, 3.7–4.5% were outbid on arrival: another member's bid reached the core first while theirs was in
+flight; none landed after the hammer. The same bids placed from a screen refreshed
 every second, judged against the same state, would have lost 73.5–73.6%: about 69% outbid on arrival, and 3.7–4.2%
 missed lots (the screen still showed the previous lot as sold while the next one was open). That is the end-to-end
 lane through this demo code at reduced scale, not the broker alone, and the comparison is the kit's model, not a
@@ -90,7 +90,7 @@ the 3 s countdown and the 1 s comparison screen are the kit's assumptions. Set `
 
 ## Three tests
 
-1. **Sale start across every yard:** `python auction_block.py --yards 500 --lanes-per-yard 2` with
+1. **Sale start across every yard:** `python auction_block.py --yards 400 --lanes-per-yard 2` with
    `bid_edge.py --bid-rate 8`; every lane opens in the same second.
    Pass: state-to-edge p99 under 50 ms on every edge through the first minute.
 2. **Member activity at full volume next door:** `python member_activity_flood.py --mbps 50` while it runs.
@@ -114,7 +114,8 @@ client; the rest stays the same.
 ## What Apache Iggy 0.9 does not have yet
 
 A Kafka-compatible API (a gateway is in progress), so Kafka clients can't read the lane; edge nodes use the Apache
-Iggy SDK (Java, C#, Go, Rust, Python, Node.js). No Pub/Sub or Kinesis connector ships today. Delivery is
+Iggy SDK (Java, C#, Go, Rust, Python, Node.js). The kit's bridge reads Kafka; for Pub/Sub or Kinesis, swap its
+consumer. Delivery is
 at-least-once; the per-lane sequence makes replays and retries safe. Replicated clusters shipped in September 2026,
 which is why the evaluation kills a leader on purpose.
 
