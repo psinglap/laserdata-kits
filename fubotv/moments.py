@@ -8,7 +8,9 @@ last write. Per game, in the order a game produces them:
     the pitch it came from;
   * the clip of that key play, once it is cut from the cloud DVR recording and playable: --clip-s after the play
     (real seconds; cutting a clip is wall-clock work, whatever the game speed);
-  * for some home runs, a replay review a few seconds later: upheld, or overturned (the runs come off the score).
+  * for some home runs, a replay review --review-s after the play: upheld, or overturned (the runs come off the
+    score). A review that ends before the clip is ready holds the alert back; one that ends after it is a
+    correction.
 
 On start it writes one opening line per game (sequence 1, the score at the start). Game time is compressed: --speed
 20 (the default) pitches 20 times faster than real time (a pitch about every second per game instead of every
@@ -79,8 +81,7 @@ class Game:
             self.later.append((now + rng.uniform(*self.a.clip_s), "clip", self.play,
                                {"c": f"{self.id}-{self.play}", "len": rng.randint(12, 40)}))
             if res == "HR" and rng.random() < self.a.review_share:
-                lo, hi = self.a.clip_s
-                self.later.append((now + rng.uniform(lo * 0.5, hi * 1.3), "review", self.play,
+                self.later.append((now + rng.uniform(*self.a.review_s), "review", self.play,
                                    {"v": "overturned" if rng.random() < 0.5 else "upheld"}))
         if res == "out":
             self.outs += 1
@@ -155,7 +156,8 @@ async def main(a):
         while ready[0] < PARTITIONS:
             await asyncio.sleep(0.05)
         print(f"[moments] opening lines: {len(games)} live games across {PARTITIONS} partitions, pitches at "
-              f"{a.speed:g}x, clips ready {a.clip_s[0]:g}-{a.clip_s[1]:g} s after the play", flush=True)
+              f"{a.speed:g}x, clips ready {a.clip_s[0]:g}-{a.clip_s[1]:g} s and reviews "
+              f"{a.review_s[0]:g}-{a.review_s[1]:g} s after the play", flush=True)
         gc.freeze()                              # keep startup objects out of the collector's way
         t0 = time.monotonic()
         started.set()
@@ -179,6 +181,8 @@ if __name__ == "__main__":
     p.add_argument("--speed", type=float, default=20, help="game time vs real time (1 = real time)")
     p.add_argument("--clip-s", type=lambda s: tuple(float(x) for x in s.split(",")), default=(4.0, 12.0),
                    help="seconds from a key play to its clip being playable, as min,max (illustrative)")
+    p.add_argument("--review-s", type=lambda s: tuple(float(x) for x in s.split(",")), default=(30.0, 120.0),
+                   help="seconds from a reviewed home run to the review's result, as min,max (illustrative)")
     p.add_argument("--review-share", type=float, default=0.15, help="share of home runs that go to replay review")
     p.add_argument("--tick-ms", type=float, default=2, help="each writer writes once per this many ms")
     asyncio.run(main(p.parse_args()))

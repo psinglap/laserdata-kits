@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # CI smoke test: start Apache Iggy 0.9.0 and run the key-play alerts lane at small scale for about a minute:
-# 80 live games (game time 60x real time, about 250 moments a second, clips ready 1-4 s after each key play, some
-# home runs reviewed and overturned), Game Alerts reading the lane, player viewing events next door with a 4x
-# first-pitch surge, and Game Alerts restarted mid-game.
+# 80 live games (game time 60x real time, about 250 moments a second, clips ready 1-4 s after each key play, a
+# third of home runs reviewed 0.5-5 s after the play, so some reviews end before the clip and some after), Game
+# Alerts reading the lane, player viewing events next door with a 4x first-pitch surge, and Game Alerts restarted
+# mid-game.
 # Pass only if Game Alerts holds its 50 ms clip-to-alert p99 budget in 95% of its steady-state seconds with alerts,
 # sees no gaps, holds back alerts whose call was overturned before the clip was ready, corrects ones overturned
 # after the push, rebuilds every live game from the log after its restart, and the alerts-sent record holds no alert
@@ -19,7 +20,7 @@ for _ in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/8090) 2>/dev/null && break; 
 pip install -q -r requirements.txt
 python -m py_compile common.py moments.py game_alerts.py viewing_events.py kafka_bridge.py
 G=80
-timeout 88 python -u moments.py --games $G --speed 60 --clip-s 1,4 --review-share 0.3 > moments.log 2>&1 &
+timeout 88 python -u moments.py --games $G --speed 60 --clip-s 1,4 --review-s 0.5,5 --review-share 0.3 > moments.log 2>&1 &
 sleep 4
 timeout 76 python -u viewing_events.py --rate 250 --x 4 --at 30 --for 15 > viewing.log 2>&1 &
 # Game Alerts stops at 46 s and starts again: it must rebuild every live game from the log and push nothing twice.
