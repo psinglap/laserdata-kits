@@ -7,10 +7,10 @@ playable, so a tap on the alert always opens the play.
   * review overturned later:   a correction follows the alert that already went out.
 
 It reads every partition with its own position, on its own connection, so it slows nothing else that reads the
-lane. Each alert is first recorded on the alerts-sent topic and then handed to the push gateway (simulated here:
-the kit counts it). On start, or a restart, it reads that record, then rebuilds every live game from the lane: an
-alert already recorded is never pushed again, a missed one still young enough (--late-s) is pushed late, an older
-one is skipped. Recording first means a crash in the few ms between the record and the push can miss one alert;
+lane. Each alert is first recorded on the alerts-sent topic, tagged with this service's --name, and then handed to
+the push gateway (simulated here: the kit counts it). On start, or a restart, it reads its own entries in that
+record, then rebuilds every live game from the lane: an alert already recorded is never pushed again, a missed one
+still young enough (--late-s) is pushed late, an older one is skipped. Recording first means a crash in the few ms between the record and the push can miss one alert;
 it never pushes one twice.
 
 Prints a line a second: clip-to-alert latency (clip ready on the lane -> alert decided here) against --budget-ms,
@@ -30,8 +30,8 @@ from apache_iggy import Consumer, PollingStrategy, SendMessage
 from common import DEFAULT_URL, LANE, PARTITIONS, SENT, STREAM, Window, connect, ensure_topic, unpack
 
 
-async def read_sent(c, name: str) -> tuple[set, int, int]:
-    # Everything this service has recorded as pushed today, from the start of the record.
+async def read_sent(c, name: str, who: str | None) -> tuple[set, int, int]:
+    # Everything service `who` has recorded as pushed today (every service if None), from the start of the record.
     sent, dup, n, nxt = set(), 0, 0, None
     me = Consumer.Single(f"{name}-record")
     while True:
@@ -39,7 +39,9 @@ async def read_sent(c, name: str) -> tuple[set, int, int]:
                                    polling_strategy=PollingStrategy.Offset(nxt) if nxt is not None else PollingStrategy.First())
         for msg in ms:
             v = json.loads(msg.payload())
-            key = (v["g"], v["p"], v["a"])
+            if who is not None and v["n"] != who:
+                continue                                 # another reader's alerts (e.g. a shadow or a second service)
+            key = (v["n"], v["g"], v["p"], v["a"])
             dup += key in sent
             sent.add(key)
             n += 1
@@ -52,14 +54,15 @@ async def main(a):
     admin = await connect(a.url)
     await ensure_topic(admin, SENT, 1)
     if a.audit:
-        sent, n, dup = await read_sent(admin, a.name + "-audit")
+        sent, n, dup = await read_sent(admin, a.name + "-audit", None)
         print(f"[audit] alerts-sent record: {n:,} alerts, {len(sent):,} distinct, recorded twice {dup}", flush=True)
         return
     while not await admin.get_topic(STREAM, LANE):
         print(f"[{a.name}] waiting for moments.py to create the game-moments lane…", flush=True)
         await asyncio.sleep(1)
 
-    sent, n0, dup0 = await read_sent(admin, a.name)
+    sent, n0, dup0 = await read_sent(admin, a.name, a.name)
+    sent = {k[1:] for k in sent}
     print(f"[{a.name}] alerts already pushed today, from the record: {n0:,} (recorded twice {dup0})", flush=True)
     seqs = {}                                            # game -> last seq applied
     plays = {}                                           # (game, play) -> {"t","e","sc","ns","clip","over"}
@@ -84,7 +87,7 @@ async def main(a):
             if kind == "play":
                 p2p.append((now - info["ns"]) / 1e9)
         sent.add(key)
-        queue.append(SendMessage(json.dumps({"g": g, "p": p, "a": kind, "t": info["t"], "e": info["e"],
+        queue.append(SendMessage(json.dumps({"n": a.name, "g": g, "p": p, "a": kind, "t": info["t"], "e": info["e"],
                                              "sc": v["sc"], "ns": time.time_ns()}, separators=(",", ":")).encode()))
         return True
 
