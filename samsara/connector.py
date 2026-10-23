@@ -155,9 +155,9 @@ async def main(a):
                     gone = time.monotonic() - drain[t]
                     oldest[t] = max(oldest[t], gone)
                     print(f"[{name}] broker down: {t} streamed 0/s  backlog {b:,} on its own topic, offset held at "
-                          f"the last streamed datapoint  down for {gone:4.1f} s of the {window:g} s recovery window",
-                          flush=True)
-                elif b > a.batch or (time.time_ns() - held_at.get(t, 0) < 2e9 and st["held_" + t]):
+                          f"the last streamed datapoint  down for {gone:4.1f} s of the {window / 3600:g} h recovery "
+                          f"window", flush=True)
+                elif b > a.batch or (b > 0 and time.time_ns() - held_at.get(t, 0) < 2e9 and st["held_" + t]):
                     oldest[t] = max(oldest[t], held_wait[t])
                     print(f"[{name}] backfilling at destination limit: {t} streamed {st['held_' + t]:,}/s (limit "
                           f"{a.rate_limit:,.0f}/s)  backlog {b:,} on its own topic  oldest waiting {held_wait[t]:5.1f} s",
