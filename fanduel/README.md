@@ -2,7 +2,8 @@
 
 Every account and wallet event a state's sportsbook accepts (a deposit, a bet placed, a bet settled, a cash out, a
 withdrawal) reaches the second site in the same state in milliseconds, at the same partition and offset, so
-rerouting traffic inside the state loses nothing, even at a 5x kickoff. A wallet replica at the second site keeps
+a reroute inside the state finds the latest balance, with only the last few milliseconds in flight at risk,
+even at a 5x kickoff. A wallet replica at the second site keeps
 every balance current and rebuilds from its own site's log after a restart. Nothing leaves the state. It runs
 beside Kafka: the sportsbook, the wallet database, Confluent Cloud, Flink and Tinybird stay where they are.
 
