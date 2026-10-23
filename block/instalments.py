@@ -43,7 +43,7 @@ async def main(a):
     delayed = deque()                       # changes waiting to reach the lagged cache
     outbox = []                             # charges waiting for the sender task
     lat, st, run = Window(), defaultdict(int), defaultdict(int)
-    caught = [None]
+    caught, caught_ns = [None], [0]   # changes made while the cache was rebuilding are replay, not live latency
     keys = []
 
     def apply(c):
@@ -81,8 +81,8 @@ async def main(a):
                         c = load(body)
                         if strings_with_card_numbers(c):
                             st["pan_seen"] += 1     # the producer's guard let a card number through
-                        if caught[0] is not None and c["seq"] > 1 and c["ns"] >= start_ns:
-                            lat.add((now - c["ns"]) / 1e6)      # a live change, not the rebuild
+                        if caught[0] is not None and c["seq"] > 1 and c["ns"] >= caught_ns[0]:
+                            lat.add((now - c["ns"]) / 1e6)      # a live change made after the rebuild
                         else:
                             run["replayed"] += 1
                         apply(c)
@@ -91,7 +91,7 @@ async def main(a):
                 elif p not in done:
                     done.add(p)             # this partition has been read to the end of the log once
                     if len(done) == P:
-                        caught[0] = time.monotonic()
+                        caught[0], caught_ns[0] = time.monotonic(), time.time_ns()
                         gc.freeze()         # keep the rebuilt cache out of the collector's way
                         print(f"[{a.name}] rebuilt the token cache from the log in {(now - start_ns) / 1e9:.2f}s: "
                               f"{len(cache):,} customers, {run['replayed']:,} changes", flush=True)
