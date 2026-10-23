@@ -59,9 +59,9 @@ pos, ent, ok = tot(r"\] +([0-9,]+) positions/s"), tot(r"entitled to ([0-9,]+):")
 leaks, missed, late, held = tot(r"leaks ([0-9,]+),"), tot(r"missed ([0-9,]+),"), tot(r"late ([0-9,]+) "), tot(r"withheld ([0-9,]+) ")
 started, done, stops, stale = tot(r"tracking started ([0-9,]+)"), tot(r"completed ([0-9,]+)"), tot(r"stopped ([0-9,]+)"), tot(r"on stops: ([0-9,]+) sent")
 print("in steady state: positions %d  tracking started %d  completed %d  stopped mid-route %d  positions customers were "
-      "entitled to %d: shared with the right customer %d (%.3f%%), leaks %d, missed %d, late %d  withheld %d  "
+      "entitled to %d: shared with the right customer %d, leaks %d, missed %d, late %d  withheld %d  "
       "a gate 5 s late on stops would have sent %d positions after the shipment left the truck" % (
-    pos, started, done, stops, ent, ok, 100 * ok / max(ent, 1), leaks, missed, late, held, stale))
+    pos, started, done, stops, ent, ok, leaks, missed, late, held, stale))
 s = [l for l in f if re.search(r"position-to-customer n [1-9]", l)]
 if s:
     print("position-to-customer (position to 3 notifiers, both hops): p50 %.1f ms  p99 %.1f ms (medians of %d s)" % (
