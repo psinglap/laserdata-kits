@@ -6,6 +6,7 @@ at once, so members bid on the current price. It runs beside VB3, so nothing els
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.copart-kit
 - **One slide:** [`LaserData_Copart_LiveLotLane.pdf`](LaserData_Copart_LiveLotLane.pdf)
 
 ## Why this use case
