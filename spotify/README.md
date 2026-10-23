@@ -8,6 +8,7 @@ line. It runs beside Pub/Sub and the publishing pipeline, so nothing else has to
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the open-source engine
 LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.spotify-kit
 - **One slide:** [`LaserData_Spotify_EpisodeStatus.pdf`](LaserData_Spotify_EpisodeStatus.pdf)
 
 ## Why this use case
