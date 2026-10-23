@@ -4,8 +4,10 @@ Every block a model replica stores or evicts reaches every KV cache-aware router
 request on that prefix, and a new router rebuilds its index from the log. It runs beside your event plane, so
 nothing else has to move.
 
-**Apache Iggy, built by LaserData.** One-slide pitch: [`LaserData_Baseten_KVCacheEvents.pdf`](LaserData_Baseten_KVCacheEvents.pdf).
-Write-up with the setup script: @@WRITEUP@@
+This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
+open-source engine LaserData builds and runs.
+
+- **One slide:** [`LaserData_Baseten_KVCacheEvents.pdf`](LaserData_Baseten_KVCacheEvents.pdf)
 
 ## Why this lane
 
@@ -53,7 +55,28 @@ kit's blocks are 512 tokens, coarser than an engine's, so one Python process can
 
 ## CI result
 
-@@CI@@
+**What the numbers mean.** The kit times each KV event from the moment `serving.py`'s replica makes the change
+(including up to one 5 ms request tick before the batch is sent) to the moment each router has applied it to
+its index, through Python clients, on whatever machine you run it on. On a shared 2-vCPU CI runner with the
+broker and all scripts on one box, at reduced scale (8 replicas x 22,000 blocks, 4 routers, 3,000 sessions,
+300 requests/s, about 600 KV events/s read by every router), three green runs on the final code held
+event-to-routers p50 2.35–2.42 ms, p99 3.99–4.50 ms and p99.9 4.91–5.54 ms (medians of the steady-state
+seconds; 63–64 of 64 seconds inside the 20 ms budget). The one second over budget, in one run, was the second
+in which the fifth router replayed the log: it shares one Python process with the routers being timed. With
+2 MB/s of inference telemetry on the same broker, the lane's p99 moved by about 0.5 ms (3.42–3.96 ms before,
+3.93–4.44 ms with it). Gaps stayed 0 in every run.
+
+The business numbers: at a 74.8–75.6% hit rate of prompt tokens, routers made 1–3 stale routes in the
+steady state (1,536–43,008 tokens prefilled again); a view one second behind, scoring the same requests
+against the same cache state, would have made 494–535 (18.3–19.7 million tokens), so the lane kept
+99.4–99.8% of them away. The router started at 30 s replayed 14,325–14,348 events in 0.40–0.46 s and its
+index was identical to a router that never stopped (176,000 block copies at the same offset).
+
+All of this is end-to-end through Python on a shared runner, at reduced scale; it is not a broker benchmark.
+The broker's own tail latency is measured separately on dedicated machines ([`bench/PLAN.md`](bench/PLAN.md)).
+Runs: [39875743736](https://github.com/psinglap/laserdata-kits/actions/runs/39875743736),
+[39875956826](https://github.com/psinglap/laserdata-kits/actions/runs/39875956826),
+[39876142721](https://github.com/psinglap/laserdata-kits/actions/runs/39876142721).
 
 ## Then try it on your traffic
 
