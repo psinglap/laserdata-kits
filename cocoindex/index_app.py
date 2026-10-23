@@ -64,7 +64,7 @@ async def coco_lifespan(builder: coco.EnvironmentBuilder) -> AsyncIterator[None]
         yield
 
 
-stats = {"applied": 0, "read": 0, "offset": -1, "first": None}
+stats = {"applied": 0, "read": 0, "offset": -1, "first": None, "engine_ready": False, "t0": time.monotonic()}
 
 
 @coco.fn
@@ -96,7 +96,42 @@ async def app_main() -> None:
     # poll_interval: without one the consumer re-polls in a busy loop while it waits for offsets to be stored.
     threads = iggy.topic_as_map(coco.use_context(IGGY), A.group, STREAM, A.topic, key=key, is_deletion=is_deletion,
                                 batch_length=A.batch, poll_interval=timedelta(milliseconds=10))
-    await coco.mount_each(process_thread, threads, table)
+    await coco.mount_each(process_thread, ReadyFirst(threads), table)
+
+
+class ReadyFirst:
+    """Signal CocoIndex ready before the first message, then let the connector deliver.
+
+    Found while building this kit (CocoIndex 1.0.25 and 1.0.26, Postgres target): in live mode, rows that a
+    LiveMapFeed declares before it calls mark_ready() are deleted again when the engine finishes its readiness pass,
+    and builds in flight at that moment fail with "tracking info not found for commit". The Kafka and Iggy sources both
+    deliver their backlog first and mark ready once caught up, so a fresh index lost most of its first rows. Marking
+    ready first and waiting for the engine to report READY avoids it; the connector's own "caught up" signal is kept
+    as a log line.
+    """
+
+    def __init__(self, feed):
+        self._feed = feed
+
+    async def watch(self, subscriber):
+        await subscriber.mark_ready()
+        while not stats["engine_ready"]:
+            await asyncio.sleep(0.01)
+        await self._feed.watch(_CaughtUpLogger(subscriber))
+
+
+class _CaughtUpLogger:
+    def __init__(self, subscriber):
+        self._sub = subscriber
+
+    async def update(self, key, value):
+        return await self._sub.update(key, value)
+
+    async def delete(self, key):
+        return await self._sub.delete(key)
+
+    async def mark_ready(self):
+        print(f"[index] caught up with the topic after {time.monotonic() - stats['t0']:.1f} s; live", flush=True)
 
 
 app = coco.App(coco.AppConfig(name="IggyReviewContext"), app_main)
@@ -130,14 +165,12 @@ async def main():
     end = await topic_end(probe, A.topic)
     print(f"[index] topic {STREAM}/{A.topic} ends at offset {end:,}; table {A.table} in Postgres", flush=True)
     tasks = [asyncio.create_task(heartbeat()), asyncio.create_task(report(end))]
+    stats["t0"] = time.monotonic()
     handle = app.update(live=True)
-    t0 = time.monotonic()
     gc.freeze()
-    ready = False
     async for snap in handle.watch():
-        if not ready and snap.status == coco.UpdateStatus.READY:
-            ready = True
-            print(f"[index] caught up with the topic after {time.monotonic() - t0:.1f} s; live", flush=True)
+        if snap.status == coco.UpdateStatus.READY:
+            stats["engine_ready"] = True
     for t in tasks:
         t.cancel()
 
