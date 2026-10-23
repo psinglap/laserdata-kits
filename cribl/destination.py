@@ -47,13 +47,18 @@ async def main(a):
     st, total = defaultdict(int), defaultdict(int)
     lat = Window()
     late = [0]
-    size = [300.0]                                   # running mean event size, for bytes waiting
+    size = [0.0]                                     # mean stored size of an event in this topic, for bytes waiting
     oldest = [0.0]
     t0 = time.monotonic()
     out_from, out_to = a.outage_at, a.outage_at + a.outage_for
     phase = {"down": False, "drain_started": None}
     budget_ns = a.budget_ms * 1_000_000
     gc.freeze()                                      # keep startup tables out of the collector's way
+
+    async def refresh_size():
+        t = await admin.get_topic(STREAM, TOPIC)
+        if t and t.messages_count:
+            size[0] = t.size / t.messages_count
 
     def is_down():
         return a.outage_for > 0 and out_from <= time.monotonic() - t0 < out_to
@@ -96,10 +101,8 @@ async def main(a):
 
     def apply_live(ms, now):
         for m in ms:
-            b = m.payload()
-            e = load(b)
+            e = load(m.payload())
             h, s = e["host"], e["seq"]
-            size[0] += (len(b) - size[0]) * 0.001
             last = seq_live.get(h)
             if last is None:
                 if phase["drain_started"] is not None:
@@ -146,6 +149,7 @@ async def main(a):
                 now_end = await ends(admin, STREAM, TOPIC)
                 held = list(live_next)
                 live_next[:] = now_end
+                await refresh_size()
                 start_drain(held, now_end, "destination back")
             more = False
             for pid in range(parts):
@@ -189,6 +193,7 @@ async def main(a):
     async def report():
         while True:
             await asyncio.sleep(1)
+            await refresh_size()
             if phase["down"]:
                 end = await ends(admin, STREAM, TOPIC)
                 w = sum(e - n for e, n in zip(end, live_next))
@@ -214,6 +219,7 @@ async def main(a):
 
     print(f"[{name}] reading {STREAM}/{TOPIC}, {parts} partitions, live from the end of the log", flush=True)
     if a.backfill:
+        await refresh_size()
         start_drain([0] * parts, tail, "backfill from the first offset")
     await asyncio.gather(live(), drainer(), report())
 
