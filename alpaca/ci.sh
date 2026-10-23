@@ -30,10 +30,10 @@ for g in gw-1 gw-2; do
 done
 echo "--- gw-2 slow partner"; grep -E "slow partner corr-06: (slow|draining)" gw-2.log | sed -E 's/.*(slow partner)/\1/' | sed -n '1p;8p;$p' || true
 grep -E "caught up [0-9.]+s after" gw-2.log | sed -E 's/.*(slow partner)/\1/' || true
-echo "--- oms seconds with a tick started over 50 ms late"; grep -nE "tick late max ([5-9][0-9]|[0-9]{3,})ms" oms.log || true
+echo "--- oms seconds with a tick started 8 ms or more late"; grep -nE "tick late max ([89]|[0-9]{2,})ms" oms.log | sed -E "s/  new .*(write ack)/  \1/" || true
 status=0
 for g in gw-1 gw-2; do
-  echo "--- $g FAIL seconds (line: output)"; grep -n "FAIL (" $g.log | sed -E 's/  to partners.*//' || true
+  echo "--- $g FAIL seconds (line: output)"; grep -n "FAIL (" $g.log | sed -E 's/  to partners.*(disconnects [0-9]+ resumes [0-9]+).*(loop late.*)/  \1  \2/' || true
   # Skip a 10 s warm-up; a shared CI runner may blip, so require 95% of steady-state seconds to pass.
   steady=$(grep -E "\[$g\] +[1-9][0-9,]* events/s" $g.log | tail -n +11 || true)
   live=$(grep -c 'PASS (' <<<"$steady" || true)
@@ -74,7 +74,7 @@ cu = nums(r"caught up ([0-9.]+)s after it sped up", open("gw-2.log").readlines()
 print("both gateways: disconnects %d, resumes %d from since_id, %d events lost in flight and redelivered, %d events "
       "held in the log while partners were away or behind; gaps 0, duplicates 0, unrecoverable 0" % (
       tot["disconnects"], tot["resumes"], tot["lost"], tot["held"]))
-print("slow partner corr-06: peak lag %d events, %d events read back from its log, caught up %.1f s after it sped up, "
+print("slow partner corr-06: peak lag %d events, %d events read back from its log, caught up %.2f s after it sped up, "
       "none lost" % (max(lag or [0]), tot["slow"], cu[0] if cu else float("nan")))
 if tot["resumes"] < 5 or tot["lost"] < 5 or max(lag or [0]) < 100:
     raise SystemExit("too few resumes, or the slow partner never fell behind")

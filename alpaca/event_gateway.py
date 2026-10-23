@@ -206,6 +206,25 @@ async def main(a):
             pt.lag = behind
             tot["max_lag"] = max(tot["max_lag"], behind)
 
+    gc_t = [0.0]
+
+    def on_gc(phase, info):
+        # The longest garbage-collector pause each second, printed so a slow second can be explained.
+        if phase == "start":
+            gc_t[0] = time.perf_counter()
+        else:
+            tot["gc_ms"] = max(tot["gc_ms"], (time.perf_counter() - gc_t[0]) * 1e3)
+
+    gc.callbacks.append(on_gc)
+
+    async def loop_lag():
+        # How late the event loop wakes a 5 ms timer: a stalled loop delays every partner's read.
+        due = time.monotonic()
+        while True:
+            due += 0.005
+            await asyncio.sleep(max(0.0, due - time.monotonic()))
+            tot["loop_ms"] = max(tot["loop_ms"], (time.monotonic() - due) * 1e3)
+
     async def report():
         while True:
             await asyncio.sleep(1)
@@ -237,12 +256,14 @@ async def main(a):
                   f"p99.9 {r['p999']:5.2f}ms  {ok} (<{a.budget_ms:g}ms)  to partners {st['pushed']:,}/s  "
                   f"disconnects {st['drops']} resumes {st['resumes']} (lost in flight {st['lost']}, "
                   f"resume-to-live p99 {rs['p99']:.0f}ms)  held in the log {st['held']:,}{slow}  "
-                  f"gaps {st['gaps']}  dups {st['dups']}  unrecoverable {st['unrecoverable']}", flush=True)
+                  f"gaps {st['gaps']}  dups {st['dups']}  unrecoverable {st['unrecoverable']}  "
+                  f"loop late max {tot['loop_ms']:.0f}ms  gc max {tot['gc_ms']:.0f}ms", flush=True)
             st.clear()
+            tot["loop_ms"] = tot["gc_ms"] = 0.0
 
     print(f"[{a.name}] gateway for {len(codes)} partners ({', '.join(codes)}), reading "
           f"{sum(PARTS[c] for c in codes)} partitions; slow partner: {a.slow or 'none'}", flush=True)
-    await asyncio.gather(report(), life(), lagging(),
+    await asyncio.gather(report(), life(), lagging(), loop_lag(),
                          *(read(pt, p) for pt in partners.values() for p in range(PARTS[pt.code])))
 
 
