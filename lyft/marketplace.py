@@ -21,6 +21,7 @@ after the seal each frame was ready at this reader, and the role's business numb
 import argparse
 import asyncio
 import gc
+import json
 import os
 import random
 import time
@@ -51,7 +52,8 @@ async def main(a):
         s = staging[r][f]
         if s["of"] is None or len(s["chunks"]) < s["of"]:
             return
-        cells = [c for i in range(s["of"]) for c in s["chunks"][i]]
+        # cells stay raw bytes until the whole frame is in; parsed once, here
+        cells = json.loads(b"[" + b",".join(s["chunks"][i][1:-1] for i in range(s["of"])) + b"]")
         live[r] = (f, cells)
         for g in [g for g in staging[r] if g <= f]:
             del staging[r][g]
@@ -64,13 +66,13 @@ async def main(a):
             # cells where demand over the next 15 minutes runs ahead of supply: a bonus heatmap would light them up
             st["zones"] += sum(1 for _, d, sp in cells if d[0] + d[1] + d[2] > 1.3 * (sp[0] + sp[1] + sp[2]))
 
-    def apply(c, now):
+    def apply(c, raw, now):
         r, f = c["r"], c["f"]
         if r in live and f <= live[r][0]:
             return                            # an older or repeated frame: the newest frame wins
         s = staging[r].setdefault(f, {"chunks": {}, "of": None, "ns": 0})
         if c["t"] == "c":
-            s["chunks"][c["i"]] = c["cells"]
+            s["chunks"][c["i"]] = raw
         else:
             s["of"], s["ns"], s["ev"] = c["of"], c["ns"], c["ev"]
             sealed[r][f] = c["ns"]
@@ -84,7 +86,7 @@ async def main(a):
         while True:
             now_m = time.monotonic()
             st["gap_ms"] = max(st["gap_ms"], 1000 * (now_m - last))    # longest pass over all partitions
-            last, more = now_m, False
+            last, more, got = now_m, False, []
             for p in range(P):
                 ms = await reader.poll_messages(STREAM, FORECASTS, consumer=who[p], partition_id=p, count=a.batch,
                                                 auto_commit=False,
@@ -93,23 +95,28 @@ async def main(a):
                 if ms:
                     nxt[p] = ms[-1].offset() + 1
                     for m in ms:
-                        c = load(m.payload())
+                        head, _, raw = m.payload().partition(b"\n")      # small header, then the cells
+                        c = load(head)
                         if caught[0] is None:
                             run["replayed"] += 1
                         elif c["ns"] >= start_ns:           # created after this reader started: live, not the rebuild
                             lat.add((now - c["ns"]) / 1e6)
                             st["msgs"] += 1
-                        apply(c, now)
+                        got.append((c, raw))
                 if len(ms) == a.batch:
                     more = True             # a rebuild or a burst: read on at once
                 elif p not in done:
                     done.add(p)             # this partition has been read to the end of the log once
-                    if len(done) == P:
-                        caught[0] = time.monotonic()
-                        polled[0] = {r: v[0] for r, v in live.items()}
-                        gc.freeze()         # keep the rebuilt state out of the collector's way
-                        print(f"[{a.name}] rebuilt the latest frame of {len(live):,} regions from the log in "
-                              f"{(now - start_ns) / 1e9:.2f}s ({run['replayed']:,} messages replayed)", flush=True)
+            # Read every partition first, then apply: a region's frame never waits on another partition's parsing.
+            now = time.time_ns()
+            for c, raw in got:
+                apply(c, raw, now)
+            if caught[0] is None and len(done) == P:
+                caught[0] = time.monotonic()
+                polled[0] = {r: v[0] for r, v in live.items()}
+                gc.freeze()                 # keep the rebuilt state out of the collector's way
+                print(f"[{a.name}] rebuilt the latest frame of {len(live):,} regions from the log in "
+                      f"{(now - start_ns) / 1e9:.2f}s ({run['replayed']:,} messages replayed)", flush=True)
             if not more:
                 await asyncio.sleep(a.poll_ms / 1000)
 

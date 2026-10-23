@@ -72,7 +72,7 @@ async def main(a):
                 n = (a.cells + a.chunk - 1) // a.chunk
                 for c in range(n):
                     body = ",".join(fr[j][(f + j) % VARIANTS] for j in range(c * a.chunk, min(a.cells, (c + 1) * a.chunk)))
-                    ms.append(SendMessage(('{"t":"c","r":"%s","f":%d,"i":%d,"ns":%d,"cells":[%s]}'
+                    ms.append(SendMessage(('{"t":"c","r":"%s","f":%d,"i":%d,"ns":%d}\n[%s]'
                                            % (r, f, c, time.time_ns(), body)).encode()))
                 ms.append(SendMessage(('{"t":"s","r":"%s","f":%d,"of":%d,"ev":%d,"ns":%d}'
                                        % (r, f, n, 1 if (i == 0 and event) else 0, time.time_ns())).encode()))

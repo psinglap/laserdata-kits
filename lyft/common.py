@@ -3,8 +3,9 @@ geohash-6 cell, from the forecasting models to Rider Pricing and Driver Earnings
 
 A frame is one forecast run for one region: for every geohash-6 cell, the demand and supply forecast for each
 5-minute interval of the next hour (12 values each), the shape Lyft's forecasting post describes. A region's
-frame travels as chunks of cells followed by a seal that says how many chunks the frame has. All of a region's
-messages land in one partition, in order, so a reader that has the seal has the whole frame.
+frame travels as chunks of cells (a one-line JSON header, a newline, then the cells as a JSON list), followed by
+a seal that says how many chunks the frame has. All of a region's messages land in one partition, in order, so a
+reader that has the seal has the whole frame.
 
 Region names and geohash prefixes here are illustrative.
 """
@@ -19,7 +20,7 @@ from apache_iggy import IggyClient, IggyExpiry
 STREAM = "marketplace-forecasts"
 FORECASTS = "geohash-forecasts"     # the lane: chunks and seals of every region's forecast frames, keyed by region
 ANALYTICS = "analytics-events"      # client and service events bound for feature generation: a heavy neighbour
-PARTITIONS = {FORECASTS: 16, ANALYTICS: 16}
+PARTITIONS = {FORECASTS: 8, ANALYTICS: 16}
 RETENTION = {FORECASTS: IggyExpiry.ExpireDuration(timedelta(hours=1))}   # a restarted reader rebuilds from the log
 HORIZONS = 12                       # 5-minute intervals over the next hour
 DEFAULT_URL = "iggy+tcp://iggy:iggy@127.0.0.1:8090?nodelay=true"   # Nagle off: small writes go out at once

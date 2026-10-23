@@ -5,8 +5,8 @@ the topic, Rider Pricing, Driver Earnings and every other consumer are untouched
 speaks the Kafka protocol (pass SASL, IAM or TLS settings with -X).
 
 Point marketplace.py at Iggy and compare. Map your records in to_messages(): the kit needs, per region and
-forecast run, chunks {"t":"c","r":region,"f":frame,"i":chunk index,"cells":[[geohash,[demand x12],[supply x12]],...]}
-and then a seal {"t":"s","r":region,"f":frame,"of":chunk count,"ev":0}. If your topic carries one record per
+forecast run, chunks (a header {"t":"c","r":region,"f":frame,"i":chunk index,"ns":...}, a newline, then
+[[geohash,[demand x12],[supply x12]],...]) and then a seal {"t":"s","r":region,"f":frame,"of":chunk count,"ev":0}. If your topic carries one record per
 geohash, set --cells-per-run to the number of cells a region's run has; the bridge groups them into chunks and
 writes the seal when the run is complete. The record format of Lyft's forecast topic is not public; the field
 names below are placeholders.
@@ -42,8 +42,8 @@ class Runs:
         out = []
         done = self.seen[k] >= self.cells_per_run
         if len(self.pending[k]) >= self.chunk or done:
-            out.append((r, json.dumps({"t": "c", "r": r, "f": f, "i": self.sent[k], "ns": time.time_ns(),
-                                       "cells": self.pending.pop(k)}, separators=(",", ":")).encode()))
+            head = json.dumps({"t": "c", "r": r, "f": f, "i": self.sent[k], "ns": time.time_ns()}, separators=(",", ":"))
+            out.append((r, (head + "\n" + json.dumps(self.pending.pop(k), separators=(",", ":"))).encode()))
             self.sent[k] += 1
         if done:
             out.append((r, json.dumps({"t": "s", "r": r, "f": f, "of": self.sent.pop(k), "ev": 0,
