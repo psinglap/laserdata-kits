@@ -66,7 +66,8 @@ async def main(a):
         if not caught_up[0]:                # still replaying: track the oldest event seen this second
             stats["replayed"] += 1
             stats["max_age"] = max(stats["max_age"], age)
-            rebuilt.add(w)
+            if age > a.budget_ms:
+                rebuilt.add(w)              # an event from before this worker joined: the window is rebuilt
         else:
             lat.add(age)                    # live events, from the marketplace's send to applied in the window
             late_by = now_ns // 1_000_000 - (w + 1) * ws_ms
