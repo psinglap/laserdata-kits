@@ -6,6 +6,7 @@ carousel sees the cart they have now. It runs beside Confluent and Flink, so not
 This kit lets your team measure that in 15 minutes on a laptop, with Apache Iggy 0.9.0, the
 open-source engine LaserData builds and runs.
 
+- **Write-up:** https://claude.ai/artifact/A674Dn6Tu3dXoLFVokeLwC#p.instacart-kit
 - **One slide:** [`LaserData_Instacart_SessionSequence.pdf`](LaserData_Instacart_SessionSequence.pdf)
 
 ## Why this use case
