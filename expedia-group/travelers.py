@@ -106,7 +106,7 @@ async def main(a):
             for _ in range(int(owed)):
                 s = f"S{next(sid):08d}"
                 d = rng.choices(range(a.destinations), dest_w)[0]
-                sessions[s] = [d, 0, None, max(1, int(rng.expovariate(1 / mean_pages)) + 1)]
+                sessions[s] = [d, 0, None, 1 + int(rng.expovariate(1 / max(0.5, mean_pages - 0.5)))]   # mean --pages
                 seen[s] = {}
                 heapq.heappush(due, (now_m, s))
                 st["sessions"] += 1
