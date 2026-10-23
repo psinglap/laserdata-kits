@@ -38,8 +38,7 @@ wait "$CHECK" || true
 kill "$INDEX" || true
 
 echo "--- review.log"; head -n 2 review.log; tail -n 2 review.log
-echo "--- index.log"; grep -v "changes/s through" index.log | grep -v WARN | head -n 40 || true
-grep "changes/s through" index.log | awk 'NR%5==1' | head -n 30 || true
+echo "--- index.log"; grep -v WARN index.log | cut -c1-250 | head -n 200 || true
 echo "--- check.log (catching up, the last lines)"
 head -n 25 check.log | cut -c1-220 || true; grep "catching up" check.log | tail -n 3 || true
 grep -v "catching up" check.log | tail -n 6

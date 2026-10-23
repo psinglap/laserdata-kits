@@ -76,10 +76,24 @@ async def process_thread(msg, table: lancedb.TableTarget[ReviewThread]) -> None:
 
 
 first_offset = None
+DBG = {"delivered": 0, "last": -1, "applies": [], "rows": 0}
+import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+logging.getLogger("lance").setLevel(logging.ERROR)
+from cocoindex.connectors.lancedb import _target as _lt
+_orig_apply = _lt._RowHandler._apply_actions
+async def _timed_apply(self, ctx, actions):
+    t0 = time.perf_counter()
+    await _orig_apply(self, ctx, actions)
+    DBG["applies"].append((time.perf_counter() - t0) * 1000)
+    DBG["rows"] += len(actions)
+_lt._RowHandler._apply_actions = _timed_apply
 
 
 def key(message):
     global first_offset
+    DBG["delivered"] += 1
+    DBG["last"] = message.offset()
     if first_offset is None:
         first_offset = message.offset()
     return key_of(message)
@@ -118,7 +132,12 @@ async def report(end: int):
             said = True
             print(f"[index] resumed at offset {first_offset:,} (the last offset stored after a durable write); "
                   f"{max(0, end - first_offset):,} changes to replay from Iggy", flush=True)
-        print(f"[index] {applied:>6,} changes/s through CocoIndex into LanceDB", flush=True)
+        ap_ = sorted(DBG["applies"]) or [0]
+        print(f"[index] {applied:>6,} changes/s through CocoIndex into LanceDB  [dbg delivered {DBG['delivered']} last "
+              f"{DBG['last']} lance applies {len(DBG['applies'])} rows {DBG['rows']} max {ap_[-1]:.0f}ms "
+              f"sum {sum(ap_):.0f}ms]", flush=True)
+        DBG["delivered"] = DBG["rows"] = 0
+        DBG["applies"] = []
         applied = 0
 
 
