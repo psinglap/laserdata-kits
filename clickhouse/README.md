@@ -78,7 +78,13 @@ counted as live latency.
 **What the numbers mean.** CI runs the kit on a shared 2-vCPU GitHub runner with Iggy, ClickHouse and all scripts on
 one box, at reduced scale: 2,000 events/s from 2,000 sources for 80 s with a 3× spike for 8 s, ClickHouse stopped for
 12 s mid-run, the pipe killed with SIGKILL and restarted, and every 20th block sent twice as if its acknowledgement
-had been lost. CI_RESULTS. That is the end-to-end pipe through this demo's Python code, not the broker alone. Most of
+had been lost. In three green runs, event-to-ClickHouse freshness was p50 261 to 264 ms, p99 503 to 507 ms and p99.9
+511 to 513 ms (medians per second), with all 145 steady-state seconds inside the 1 s budget and no second's p99 above
+521 ms. ClickHouse was unavailable for 14 to 15 s (including its restart); up to 29,120 events waited in Iggy, and the
+pipe was live again 2 to 3 s after ClickHouse came back. Each restart found its block in flight (995 to 1,005 rows)
+had already landed, and ClickHouse dropped the re-insert; 7,981 to 8,015 repeated rows were dropped per run and none
+was written twice. `verify.py` found all 192,000 events exactly once in every run: missing 0, duplicates 0, sequence
+gaps 0 across 2,000 sources. That is the end-to-end pipe through this demo's Python code, not the broker alone. Most of
 the freshness is the 0.5 s insert interval, which is a ClickHouse insert-rate choice; the Iggy hop itself is a few ms.
 The broker's own tail latency is measured with `iggy-bench` in `bench/PLAN.md`, on dedicated machines.
 
